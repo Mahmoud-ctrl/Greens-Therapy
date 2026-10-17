@@ -43,10 +43,6 @@ export default function LoginPage() {
                 <Link href="/register" className="font-semibold text-emerald-700 hover:text-emerald-900">
                     {isArabic ? "أنشئ حساباً" : "Create one"}
                 </Link>
-                <span className="mx-2 text-slate-300">·</span>
-                <Link href="/admin" className="font-semibold text-emerald-700 hover:text-emerald-900">
-                    {isArabic ? "دخول الموظفين" : "Staff login"}
-                </Link>
             </>}
         >
             <form onSubmit={handleSubmit} className="space-y-5">

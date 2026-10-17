@@ -42,10 +42,26 @@ export function HomeHero({ locale, isStaff }: { locale: Locale; isStaff: boolean
                                 </div>
                             </div>
 
-                            <h1 className="mt-5 font-display text-[4.5rem] font-semibold leading-[0.85] tracking-tight text-emerald-950 sm:mt-7 sm:text-[7rem] lg:text-[clamp(4.5rem,15vh,9.5rem)] short:lg:mt-5">
-                                {isArabic ? "عافية" : "Heal"}
-                                <sup className="ms-1 align-super text-[0.45em] font-medium text-honey-500">+</sup>
-                            </h1>
+                            <div className="mt-5 flex items-end justify-between gap-4 sm:mt-7 lg:block short:lg:mt-5">
+                                <h1 className="min-w-0 font-display text-[clamp(3rem,15vw,4.5rem)] font-semibold leading-[0.85] tracking-tight text-emerald-950 sm:text-[7rem] lg:text-[clamp(4.5rem,15vh,9.5rem)]">
+                                    {/* The brand name stays left-to-right in Arabic so the "+" keeps its place. */}
+                                    <span dir="ltr" className="whitespace-nowrap">
+                                        Greens
+                                        <sup className="ms-1 align-super text-[0.45em] font-medium text-honey-500">+</sup>
+                                    </span>
+                                </h1>
+                                {/* Below lg the large photo is hidden to keep the therapy strip above the fold; this thumbnail takes its place. */}
+                                <div className="relative h-20 w-20 shrink-0 overflow-hidden rounded-full bg-gradient-to-br from-honey-300 to-honey-500 shadow-lg shadow-emerald-950/20 ring-4 ring-card min-[375px]:h-24 min-[375px]:w-24 sm:h-32 sm:w-32 lg:hidden">
+                                    <Image
+                                        src={therapistPoster}
+                                        alt={isArabic ? "المعالج علي أخضر" : "Healer Ali Akhdar"}
+                                        fill
+                                        priority
+                                        sizes="(min-width: 640px) 8rem, 6rem"
+                                        className="origin-[100%_18%] scale-[2.1] object-cover object-right"
+                                    />
+                                </div>
+                            </div>
 
                             <div className="mt-5 border-t border-emerald-950/15 pt-5 sm:mt-7 short:lg:mt-5 short:lg:pt-4">
                                 <p className="max-w-lg text-base leading-7 text-slate-700 sm:text-xl sm:leading-9 short:lg:text-lg short:lg:leading-8">

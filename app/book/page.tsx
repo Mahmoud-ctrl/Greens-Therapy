@@ -9,6 +9,7 @@ import { useAuth } from "@/components/auth/auth-provider";
 import { BookingFlow } from "@/components/booking/booking-flow";
 import { useLocale } from "@/components/providers/locale-provider";
 import { PageHeader } from "@/components/ui/section-shell";
+import { BookingSkeleton, LoadingRegion } from "@/components/ui/skeleton";
 
 export default function BookPage() {
     const { locale } = useLocale();
@@ -21,10 +22,6 @@ export default function BookPage() {
         if (isLoaded && staffUser) router.replace("/dashboard/appointments");
     }, [isLoaded, router, staffUser]);
 
-    if (!isLoaded || staffUser) {
-        return <div className="mx-auto flex min-h-[45vh] max-w-7xl items-center justify-center px-4 text-slate-500">{isArabic ? "جارٍ التحميل..." : "Loading..."}</div>;
-    }
-
     return (
         <div>
             <PageHeader
@@ -33,7 +30,9 @@ export default function BookPage() {
                 description={isArabic ? "اختر العلاج واليوم والوقت، وسنؤكد موعدك عبر واتساب." : "Choose your treatment, day and time, and we'll confirm on WhatsApp."}
             />
             <div className="mx-auto max-w-6xl px-4 py-12 sm:px-6 lg:px-8">
-                {user ? <BookingFlow /> : (
+                {!isLoaded || staffUser ? (
+                    <LoadingRegion label={isArabic ? "جارٍ التحميل..." : "Loading..."}><BookingSkeleton /></LoadingRegion>
+                ) : user ? <BookingFlow /> : (
                     <div className="surface-card mx-auto max-w-lg p-8 text-center sm:p-10">
                         <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-honey-50 text-honey-700">
                             <CalendarHeart size={26} strokeWidth={1.5} aria-hidden="true" />

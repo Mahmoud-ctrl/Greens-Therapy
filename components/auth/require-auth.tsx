@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/auth/auth-provider";
 import type { UserRole } from "@/lib/auth";
 
-export function RequireAuth({ allowedRoles, children }: { allowedRoles: UserRole[]; children: React.ReactNode }) {
+export function RequireAuth({ allowedRoles, children, fallback }: { allowedRoles: UserRole[]; children: React.ReactNode; fallback?: React.ReactNode }) {
     const { user, isLoaded } = useAuth();
     const router = useRouter();
 
@@ -20,7 +20,7 @@ export function RequireAuth({ allowedRoles, children }: { allowedRoles: UserRole
     }, [allowedRoles, isLoaded, router, user]);
 
     if (!isLoaded) {
-        return <div className="flex min-h-[50vh] items-center justify-center text-slate-500">Loading...</div>;
+        return fallback ?? <div className="flex min-h-[50vh] items-center justify-center text-slate-500">Loading...</div>;
     }
 
     if (!user || !allowedRoles.includes(user.role)) {

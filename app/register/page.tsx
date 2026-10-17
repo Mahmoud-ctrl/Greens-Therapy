@@ -6,6 +6,7 @@ import { useState, type FormEvent } from "react";
 
 import { AuthLayout, FormError, PasswordField, TextField } from "@/components/auth/auth-layout";
 import { useAuth } from "@/components/auth/auth-provider";
+import { LoadingButton } from "@/components/ui/loading-button";
 import { useLocale } from "@/components/providers/locale-provider";
 import { getAuthErrorMessage } from "@/lib/supabase/auth-errors";
 
@@ -88,9 +89,9 @@ export default function RegisterPage() {
                     required
                 />
                 <FormError message={error} />
-                <button type="submit" disabled={isSubmitting} className="btn-primary w-full py-3.5 text-base">
+                <LoadingButton type="submit" pending={isSubmitting} className="btn-primary w-full py-3.5 text-base">
                     {isSubmitting ? (isArabic ? "جارٍ إنشاء الحساب..." : "Creating account...") : (isArabic ? "إنشاء الحساب" : "Create account")}
-                </button>
+                </LoadingButton>
             </form>
         </AuthLayout>
     );

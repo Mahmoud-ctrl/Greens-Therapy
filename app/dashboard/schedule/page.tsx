@@ -4,6 +4,7 @@ import { useState } from "react";
 
 import { useClinicData } from "@/components/providers/clinic-data-provider";
 import { useLocale } from "@/components/providers/locale-provider";
+import { LoadingRegion, PageTitleSkeleton, Skeleton } from "@/components/ui/skeleton";
 
 function toDateKey(date: Date) {
     return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
@@ -17,7 +18,7 @@ function getWeekMonday(date: Date) {
 }
 
 export default function DashboardSchedulePage() {
-    const { appointments } = useClinicData();
+    const { appointments, isLoaded } = useClinicData();
     const { locale } = useLocale();
     const isArabic = locale === "ar";
     const [weekStart, setWeekStart] = useState(() => getWeekMonday(new Date()));
@@ -27,6 +28,15 @@ export default function DashboardSchedulePage() {
         return date;
     });
     const weekLabel = new Intl.DateTimeFormat(isArabic ? "ar" : "en", { month: "long", year: "numeric" }).format(weekStart);
+
+    if (!isLoaded) {
+        return (
+            <LoadingRegion label={isArabic ? "جارٍ تحميل الجدول..." : "Loading schedule..."} className="space-y-6">
+                <PageTitleSkeleton />
+                <div className="grid gap-3 md:grid-cols-7">{Array.from({ length: 7 }, (_, index) => <div key={index} className="space-y-2"><Skeleton className="h-5 w-16" /><Skeleton className="h-28 rounded-xl" /></div>)}</div>
+            </LoadingRegion>
+        );
+    }
 
     return (
         <div className="space-y-5">

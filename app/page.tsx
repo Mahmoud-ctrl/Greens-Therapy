@@ -2,21 +2,18 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { ArrowLeft, ArrowRight, CheckCircle2, Droplet, FlaskRound, Flower2, Hand, Pin } from "lucide-react";
-import { useEffect, useState } from "react";
+import { ArrowLeft, ArrowRight } from "lucide-react";
 
 import { useAuth } from "@/components/auth/auth-provider";
 import { ProductCard } from "@/components/catalog/product-card";
 import { TreatmentCard } from "@/components/catalog/treatment-card";
+import { HomeHero, therapies } from "@/components/home/hero";
 import { useClinicData } from "@/components/providers/clinic-data-provider";
 import { useLocale } from "@/components/providers/locale-provider";
 import { CardSkeletons, EmptyState, SectionShell } from "@/components/ui/section-shell";
-import therapistPoster from "../about us.jpeg";
 import therapistPortrait from "../ali akhdar .png";
 
 export default function HomePage() {
-  const [bookingConfirmed, setBookingConfirmed] = useState(false);
-  const [bookingWhatsAppUrl, setBookingWhatsAppUrl] = useState("");
   const { locale } = useLocale();
   const { user } = useAuth();
   const { products, treatments, isLoaded } = useClinicData();
@@ -26,113 +23,10 @@ export default function HomePage() {
   const activeTreatments = treatments.filter((treatment) => treatment.active !== false);
   const activeProducts = products.filter((product) => product.active);
 
-  useEffect(() => {
-    if (window.sessionStorage.getItem("greens-healing-booking-confirmed") === "1") {
-      window.sessionStorage.removeItem("greens-healing-booking-confirmed");
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- Consume one-shot navigation state after hydration.
-      setBookingConfirmed(true);
-    }
-    const whatsappUrl = window.sessionStorage.getItem("greens-healing-booking-whatsapp-url");
-    if (whatsappUrl) {
-      window.sessionStorage.removeItem("greens-healing-booking-whatsapp-url");
-      setBookingWhatsAppUrl(whatsappUrl);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (user?.role === "admin" || user?.role === "receptionist") {
-      const confirmation = window.sessionStorage.getItem("greens-healing-booking-confirmed");
-      if (confirmation === "1") window.sessionStorage.removeItem("greens-healing-booking-confirmed");
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- Hide patient-only confirmation from staff.
-      setBookingConfirmed(false);
-    }
-  }, [user?.role]);
-
-  const therapies = [
-    { icon: FlaskRound, ar: "العلاج بالحجامة", en: "Cupping therapy" },
-    { icon: Hand, ar: "التدليك الصيني", en: "Chinese massage" },
-    { icon: Pin, ar: "العلاج بالإبر الجافة", en: "Dry needling" },
-    { icon: Flower2, ar: "الشفاء الشامل", en: "Holistic healing" },
-  ];
 
   return (
     <div>
-      {bookingConfirmed ? (
-        <div role="status" className="mx-auto mt-6 max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="flex items-start gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-5 py-4 text-sm text-emerald-900">
-            <CheckCircle2 size={20} aria-hidden="true" className="mt-0.5 shrink-0 text-emerald-700" />
-            <div>
-              <p className="font-medium">{isArabic ? "تم حفظ طلب الموعد. أرسله عبر واتساب إلى العيادة للموافقة." : "Your appointment request is saved. Send it to the clinic on WhatsApp for approval."}</p>
-              {bookingWhatsAppUrl ? <a href={bookingWhatsAppUrl} target="_blank" rel="noreferrer" className="mt-1 inline-block font-semibold underline underline-offset-4">{isArabic ? "فتح واتساب لإرسال الطلب" : "Open WhatsApp to send the request"}</a> : null}
-            </div>
-          </div>
-        </div>
-      ) : null}
-
-      {/* Hero */}
-      <section className="relative overflow-hidden">
-        <div aria-hidden="true" className="pointer-events-none absolute -top-40 start-1/2 h-[480px] w-[480px] rounded-full bg-honey-100/60 blur-3xl" />
-        <div className="relative mx-auto grid max-w-7xl items-center gap-12 px-4 pb-16 pt-12 sm:px-6 md:grid-cols-[1.1fr_0.9fr] md:pb-24 md:pt-16 lg:px-8">
-          <div>
-            <p className="eyebrow">{isArabic ? "علاج تقليدي · عسل طبيعي" : "Traditional healing · Natural honey"}</p>
-            <h1 className="mt-5 text-5xl font-semibold leading-[1.05] text-emerald-950 sm:text-6xl lg:text-7xl">
-              {isArabic ? "شفاءٌ طبيعي بجذورٍ تقليدية" : <>Natural healing, <span className="italic text-emerald-700">rooted</span> in tradition</>}
-            </h1>
-            <p className="mt-6 max-w-xl text-lg leading-8 text-slate-600">
-              {isArabic
-                ? "حجامة وتدليك صيني وإبر جافة وجلسات شفاء شاملة مع المعالج علي أخضر، إلى جانب عسل ومنتجات طبيعية من خلايانا."
-                : "Cupping, Chinese massage, dry needling and holistic sessions with healer Ali Akhdar, alongside raw honey and natural products from our own hives."}
-            </p>
-            <div className="mt-9 flex flex-wrap gap-3">
-              {!isStaff ? (
-                <Link href="/book" className="btn-primary px-7 py-3.5 text-base">
-                  {isArabic ? "احجز جلستك" : "Book your session"}
-                  <Arrow size={18} aria-hidden="true" />
-                </Link>
-              ) : null}
-              <Link href="/treatments" className="btn-secondary px-7 py-3.5 text-base">
-                {isArabic ? "استكشف العلاجات" : "Explore treatments"}
-              </Link>
-            </div>
-          </div>
-
-          <div className="relative mx-auto w-full max-w-md">
-            <div className="relative aspect-[4/5] overflow-hidden rounded-t-[999px] rounded-b-[2rem] border-[6px] border-card shadow-2xl shadow-emerald-950/15">
-              <Image
-                src={therapistPoster}
-                alt={isArabic ? "المعالج علي أخضر في العيادة" : "Healer Ali Akhdar in the clinic"}
-                fill
-                priority
-                sizes="(min-width: 768px) 28rem, 90vw"
-                className="origin-[100%_30%] scale-[1.75] object-cover object-right"
-              />
-            </div>
-            <div className="surface-card absolute -bottom-6 start-0 flex items-center gap-3 px-4 py-3 sm:-start-8">
-              <span className="flex h-10 w-10 items-center justify-center rounded-full bg-honey-50 text-honey-700">
-                <Droplet size={20} aria-hidden="true" />
-              </span>
-              <div className="leading-tight">
-                <p className="text-sm font-semibold text-emerald-950">{isArabic ? "عسل من خلايانا" : "Honey from our hives"}</p>
-                <p className="text-xs text-slate-500">{isArabic ? "طبيعي ونقي ١٠٠٪" : "100% raw & natural"}</p>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Therapy strip */}
-        <div className="border-y border-clinic-border bg-card/70">
-          <ul className="mx-auto grid max-w-7xl grid-cols-2 gap-px px-4 sm:px-6 md:grid-cols-4 lg:px-8">
-            {therapies.map(({ icon: Icon, ar, en }) => (
-              <li key={en} className="flex items-center gap-3 py-5">
-                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-emerald-50 text-emerald-700">
-                  <Icon size={19} strokeWidth={1.5} aria-hidden="true" />
-                </span>
-                <span className="text-sm font-medium text-emerald-950">{isArabic ? ar : en}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      </section>
+      <HomeHero locale={locale} isStaff={isStaff} />
 
       {/* Treatments */}
       <SectionShell
@@ -146,7 +40,7 @@ export default function HomePage() {
           </Link>
         ) : null}
       >
-        {!isLoaded ? <CardSkeletons count={3} /> : activeTreatments.length === 0 ? (
+        {!isLoaded ? <CardSkeletons count={3} variant="treatment" label={isArabic ? "جارٍ تحميل العلاجات..." : "Loading treatments..."} /> : activeTreatments.length === 0 ? (
           <EmptyState title={isArabic ? "العلاجات قادمة قريباً" : "Treatments coming soon"} description={isArabic ? "تواصل معنا عبر واتساب لمعرفة المزيد." : "Reach out on WhatsApp to learn more."} />
         ) : (
           <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
@@ -158,7 +52,7 @@ export default function HomePage() {
       </SectionShell>
 
       {/* Meet the healer */}
-      <section className="bg-emerald-950 text-emerald-50">
+      <section id="healer" className="scroll-mt-24 bg-emerald-950 text-emerald-50">
         <div className="mx-auto grid max-w-7xl items-center gap-12 px-4 py-20 sm:px-6 md:grid-cols-[0.8fr_1.2fr] lg:px-8">
           <div className="relative mx-auto aspect-[4/5] w-full max-w-sm overflow-hidden rounded-[2rem] ring-1 ring-white/10">
             <Image src={therapistPortrait} alt={isArabic ? "صورة علي أخضر" : "Portrait of Ali Akhdar"} fill sizes="(min-width: 768px) 24rem, 90vw" className="object-cover" />
@@ -195,7 +89,7 @@ export default function HomePage() {
             </Link>
           ) : null}
         >
-          {!isLoaded ? <CardSkeletons count={4} /> : activeProducts.length === 0 ? (
+          {!isLoaded ? <CardSkeletons count={4} variant="product" label={isArabic ? "جارٍ تحميل المنتجات..." : "Loading products..."} /> : activeProducts.length === 0 ? (
             <EmptyState title={isArabic ? "المنتجات قادمة قريباً" : "Products coming soon"} />
           ) : (
             <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">

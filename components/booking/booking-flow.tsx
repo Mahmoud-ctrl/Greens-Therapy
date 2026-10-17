@@ -9,6 +9,8 @@ import { useClinicData } from "@/components/providers/clinic-data-provider";
 import { useLocale } from "@/components/providers/locale-provider";
 import { clinicWhatsAppNumber } from "@/lib/clinic-contact";
 import { formatCurrency, formatDuration } from "@/lib/i18n";
+import { LoadingButton } from "@/components/ui/loading-button";
+import { BookingSkeleton, LoadingRegion, Skeleton } from "@/components/ui/skeleton";
 
 function dateKey(date: Date) {
     return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
@@ -27,13 +29,14 @@ export function BookingFlow() {
     const router = useRouter();
     const { locale } = useLocale();
     const { user, updateProfile } = useAuth();
-    const { treatments, clinicHours, isAppointmentSlotAvailable, getBookedAppointmentSlots, bookAppointment } = useClinicData();
+    const { treatments, clinicHours, isLoaded, isAppointmentSlotAvailable, getBookedAppointmentSlots, bookAppointment } = useClinicData();
     const isArabic = locale === "ar";
     const [treatmentId, setTreatmentId] = useState("");
     const [requestedDate, setRequestedDate] = useState("");
     const [selectedTime, setSelectedTime] = useState("");
     const [phone, setPhone] = useState<string | null>(null);
     const [error, setError] = useState("");
+    const [isSubmitting, setIsSubmitting] = useState(false);
     const [bookedSlots, setBookedSlots] = useState<{ date: string; slots: Array<{ startTime: string; endTime: string }> } | null>(null);
     const phoneValue = phone ?? user?.phone ?? "";
     const treatment = treatments.find((item) => item.id === treatmentId) ?? treatments[0];
@@ -116,6 +119,7 @@ export function BookingFlow() {
             return;
         }
         const endTime = minutesToTime(timeToMinutes(selectedTime) + treatment.duration);
+        setIsSubmitting(true);
         try {
             if (phoneValue.trim() !== (user.phone ?? "")) {
                 await updateProfile({ name: user.name, email: user.email, phone: phoneValue.trim() });
@@ -129,11 +133,13 @@ export function BookingFlow() {
             if (!booked) {
                 setError(isArabic ? "هذا الموعد لم يعد متاحاً. اختر وقتاً آخر." : "That time was just booked. Please choose another slot.");
                 setSelectedTime("");
+                setIsSubmitting(false);
                 return;
             }
         } catch (cause) {
             setError(cause instanceof Error ? cause.message : (isArabic ? "تعذر حجز الموعد." : "Unable to book the appointment."));
             setSelectedTime("");
+            setIsSubmitting(false);
             return;
         }
         const whatsappMessage = [
@@ -150,8 +156,12 @@ export function BookingFlow() {
         window.sessionStorage.setItem("greens-healing-booking-confirmed", "1");
         window.sessionStorage.setItem("greens-healing-booking-whatsapp-url", whatsappUrl);
         window.open(whatsappUrl, "_blank", "noopener,noreferrer");
-        router.push("/");
+        router.push("/my-bookings");
     };
+
+    if (!isLoaded) {
+        return <LoadingRegion label={isArabic ? "جارٍ تحميل المواعيد المتاحة..." : "Loading available times..."}><BookingSkeleton /></LoadingRegion>;
+    }
 
     if (!clinicHours) {
         return (
@@ -233,6 +243,11 @@ export function BookingFlow() {
                         <StepNumber value={3} />
                         {isArabic ? "اختر الوقت" : "Pick a time"}
                     </legend>
+                    {selectedDate && bookedSlots?.date !== selectedDate && !error ? (
+                        <LoadingRegion label={isArabic ? "جارٍ تحميل الأوقات..." : "Loading times..."} className="mt-4 grid grid-cols-3 gap-2 sm:grid-cols-5">
+                            {Array.from({ length: 10 }, (_, index) => <Skeleton key={index} className="h-11 rounded-xl" />)}
+                        </LoadingRegion>
+                    ) : (
                     <div className="mt-4 grid grid-cols-3 gap-2 sm:grid-cols-5">
                         {slots.map((slot) => (
                             <button
@@ -247,7 +262,8 @@ export function BookingFlow() {
                             </button>
                         ))}
                     </div>
-                    {slots.length === 0 && selectedDate ? <p className="mt-4 text-sm text-slate-500">{isArabic ? "لا توجد أوقات متاحة لهذا اليوم." : "No available times for this day."}</p> : null}
+                    )}
+                    {slots.length === 0 && selectedDate && bookedSlots?.date === selectedDate ? <p className="mt-4 text-sm text-slate-500">{isArabic ? "لا توجد أوقات متاحة لهذا اليوم." : "No available times for this day."}</p> : null}
                 </fieldset>
 
                 <fieldset className="min-w-0">
@@ -282,9 +298,9 @@ export function BookingFlow() {
                     <span className="text-2xl font-semibold text-emerald-900">{treatment ? formatCurrency(treatment.price, locale) : "—"}</span>
                 </div>
                 {error ? <p role="alert" className="mt-4 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{error}</p> : null}
-                <button type="submit" disabled={!selectedDate || !selectedTime || !phoneValue.trim()} className="btn-primary mt-5 w-full py-3.5 text-base">
-                    {isArabic ? "تأكيد الحجز" : "Confirm booking"}
-                </button>
+                <LoadingButton type="submit" pending={isSubmitting} disabled={!selectedDate || !selectedTime || !phoneValue.trim()} className="btn-primary mt-5 w-full py-3.5 text-base">
+                    {isSubmitting ? (isArabic ? "جارٍ الحجز..." : "Booking...") : (isArabic ? "تأكيد الحجز" : "Confirm booking")}
+                </LoadingButton>
                 <p className="mt-3 text-center text-xs leading-5 text-slate-500">{isArabic ? "سيتم إرسال طلبك إلى العيادة عبر واتساب للموافقة." : "Your request is sent to the clinic on WhatsApp for approval."}</p>
             </aside>
         </form>

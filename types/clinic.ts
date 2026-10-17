@@ -60,6 +60,8 @@ export interface ProductOrder {
     customerName: string;
     customerPhone: string;
     deliveryAddress: string;
+    /** Google Maps link to the customer's location, when they shared or pasted one. */
+    locationUrl?: string;
     items: Array<{
         productId: string;
         productNameAr: string;

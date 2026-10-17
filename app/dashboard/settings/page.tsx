@@ -6,6 +6,9 @@ import { RequireAuth } from "@/components/auth/require-auth";
 import { useAuth } from "@/components/auth/auth-provider";
 import { useClinicData } from "@/components/providers/clinic-data-provider";
 import { useLocale } from "@/components/providers/locale-provider";
+import { ImageUpload } from "@/components/ui/image-upload";
+import { LoadingButton } from "@/components/ui/loading-button";
+import { LoadingRegion, PageTitleSkeleton, Skeleton } from "@/components/ui/skeleton";
 import type { ClinicHours } from "@/types/clinic";
 
 const weekdayLabels = {
@@ -21,7 +24,7 @@ function toMinutes(time: string) {
 function AdminProfileSettings() {
     const { locale } = useLocale();
     const { user, updateProfile } = useAuth();
-    const { clinicLogo, setClinicLogo, clinicHours, setClinicHours } = useClinicData();
+    const { clinicLogo, setClinicLogo, clinicHours, setClinicHours, isLoaded } = useClinicData();
     const isArabic = locale === "ar";
     const [profileDraft, setProfileDraft] = useState<{ email: string; phone: string; photoUrl: string } | null>(null);
     const profile = profileDraft ?? {
@@ -36,6 +39,8 @@ function AdminProfileSettings() {
     const { workingDays, startTime, endTime, slotInterval } = hours;
     const [hoursError, setHoursError] = useState("");
     const [hoursSaved, setHoursSaved] = useState(false);
+    const [isSavingHours, setIsSavingHours] = useState(false);
+    const [isSavingProfile, setIsSavingProfile] = useState(false);
     const fieldClass = "w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm";
 
     const updateHours = (patch: Partial<ClinicHours>) => {
@@ -46,26 +51,13 @@ function AdminProfileSettings() {
         setHoursSaved(false);
     };
 
-    const handlePhotoChange = (file?: File) => {
-        if (!file) return;
-        if (!file.type.startsWith("image/")) {
-            setError(isArabic ? "يرجى اختيار ملف صورة." : "Please choose an image file.");
-            return;
-        }
-        if (file.size > 700 * 1024) {
-            setError(isArabic ? "يجب أن يكون حجم الصورة أقل من 700 كيلوبايت." : "Choose an image smaller than 700 KB.");
-            return;
-        }
-        const reader = new FileReader();
-        reader.onload = () => {
-            setProfileDraft((current) => ({
-                ...(current ?? { email: user?.email ?? "", phone: user?.phone ?? "", photoUrl: clinicLogo || user?.photoUrl || "" }),
-                photoUrl: String(reader.result),
-            }));
-            setError("");
-            setSaved(false);
-        };
-        reader.readAsDataURL(file);
+    const handlePhotoChange = (photoUrl: string) => {
+        setProfileDraft((current) => ({
+            ...(current ?? { email: user?.email ?? "", phone: user?.phone ?? "", photoUrl: clinicLogo || user?.photoUrl || "" }),
+            photoUrl,
+        }));
+        setError("");
+        setSaved(false);
     };
 
     const saveChanges = async (event: FormEvent<HTMLFormElement>) => {
@@ -82,6 +74,7 @@ function AdminProfileSettings() {
             return;
         }
 
+        setIsSavingProfile(true);
         try {
             await updateProfile({ name: user.name, email: cleanEmail, phone: cleanPhone });
             setClinicLogo(profile.photoUrl);
@@ -91,6 +84,8 @@ function AdminProfileSettings() {
         } catch (cause) {
             setError(cause instanceof Error ? cause.message : (isArabic ? "تعذر حفظ الملف الشخصي." : "Unable to save profile."));
             setSaved(false);
+        } finally {
+            setIsSavingProfile(false);
         }
     };
 
@@ -100,6 +95,7 @@ function AdminProfileSettings() {
             setHoursError(isArabic ? "اختر يوم عمل واحداً على الأقل وأدخل ساعات صحيحة." : "Select at least one working day and enter valid hours.");
             return;
         }
+        setIsSavingHours(true);
         try {
             await setClinicHours(hours);
             setHoursError("");
@@ -107,8 +103,27 @@ function AdminProfileSettings() {
         } catch (cause) {
             setHoursError(cause instanceof Error ? cause.message : (isArabic ? "تعذر حفظ ساعات الحجز." : "Unable to save booking hours."));
             setHoursSaved(false);
+        } finally {
+            setIsSavingHours(false);
         }
     };
+
+    if (!isLoaded) {
+        return (
+            <LoadingRegion label={isArabic ? "جارٍ تحميل الإعدادات..." : "Loading settings..."} className="mx-auto max-w-2xl space-y-6">
+                <PageTitleSkeleton />
+                <div className="space-y-4">
+                    <Skeleton className="h-6 w-40" />
+                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">{Array.from({ length: 7 }, (_, index) => <Skeleton key={index} className="h-10" />)}</div>
+                    <div className="grid gap-4 sm:grid-cols-3">{Array.from({ length: 3 }, (_, index) => <Skeleton key={index} className="h-11" />)}</div>
+                    <Skeleton className="h-10 w-44 rounded-full" />
+                </div>
+                <div className="flex items-center gap-4"><Skeleton className="h-20 w-20 rounded-full" /><Skeleton className="h-10 w-36 rounded-full" /></div>
+                <Skeleton className="h-11" />
+                <Skeleton className="h-11" />
+            </LoadingRegion>
+        );
+    }
 
     return (
         <div className="mx-auto max-w-2xl space-y-6">
@@ -136,18 +151,21 @@ function AdminProfileSettings() {
                     </div>
                     {hoursError ? <p role="alert" className="text-sm text-red-700">{hoursError}</p> : null}
                     {hoursSaved ? <p role="status" className="text-sm text-emerald-800">{isArabic ? "تم حفظ ساعات الحجز." : "Booking hours saved."}</p> : null}
-                    <button type="submit" className="rounded-lg bg-emerald-700 px-5 py-2.5 text-sm font-semibold text-white hover:bg-emerald-800">{isArabic ? "حفظ ساعات الحجز" : "Save booking hours"}</button>
+                    <LoadingButton type="submit" pending={isSavingHours} className="btn-primary py-2.5">{isSavingHours ? (isArabic ? "جارٍ الحفظ..." : "Saving...") : (isArabic ? "حفظ ساعات الحجز" : "Save booking hours")}</LoadingButton>
                 </form>
             </section>
 
             <form onSubmit={saveChanges} className="space-y-5">
-                <div className="flex items-center gap-4">
-                    {profile.photoUrl ? <img src={profile.photoUrl} alt={isArabic ? "صورة المدير" : "Admin profile"} className="h-20 w-20 rounded-full border border-slate-200 object-cover" /> : <div className="flex h-20 w-20 items-center justify-center rounded-full bg-emerald-100 text-2xl font-bold text-emerald-800">{user?.name.slice(0, 1).toUpperCase()}</div>}
-                    <label className="space-y-1 text-sm font-medium text-slate-700">
-                        {isArabic ? "الصورة الشخصية" : "Profile photo"}
-                        <input type="file" accept="image/*" onChange={(event) => handlePhotoChange(event.target.files?.[0])} className="block max-w-full text-sm" />
-                    </label>
-                </div>
+                <ImageUpload
+                    label={isArabic ? "الصورة / شعار العيادة" : "Profile photo / clinic logo"}
+                    value={profile.photoUrl}
+                    onChange={handlePhotoChange}
+                    onError={(message) => { setError(message); setSaved(false); }}
+                    maxBytes={150 * 1024}
+                    maxDimension={512}
+                    isArabic={isArabic}
+                    previewClassName="h-20 w-20 rounded-full"
+                />
 
                 <label className="block space-y-1.5 text-sm font-medium text-slate-700">
                     {isArabic ? "البريد الإلكتروني" : "Email address"}
@@ -161,7 +179,7 @@ function AdminProfileSettings() {
 
                 {error ? <p role="alert" className="text-sm text-red-700">{error}</p> : null}
                 {saved ? <p role="status" className="text-sm text-emerald-800">{isArabic ? "تم حفظ الملف الشخصي." : "Profile saved."}</p> : null}
-                <button type="submit" className="rounded-lg bg-emerald-700 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-800">{isArabic ? "حفظ التغييرات" : "Save changes"}</button>
+                <LoadingButton type="submit" pending={isSavingProfile} className="btn-primary py-2.5">{isSavingProfile ? (isArabic ? "جارٍ الحفظ..." : "Saving...") : (isArabic ? "حفظ التغييرات" : "Save changes")}</LoadingButton>
                 <p className="text-xs leading-5 text-slate-500">{isArabic ? "تُحفظ معلومات الملف الشخصي مع حساب العيادة." : "Profile details are saved with the clinic account."}</p>
             </form>
         </div>

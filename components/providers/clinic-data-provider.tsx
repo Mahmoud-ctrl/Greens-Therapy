@@ -18,10 +18,60 @@ import { createClient } from "@/lib/supabase/client";
 import type { CartItem, ClinicAppointment, ClinicHours, Product, ProductOrder, Treatment } from "@/types/clinic";
 
 const cartStorageKey = "greens-healing-cart";
-const ordersStorageKey = "greens-healing-product-orders";
 const clinicLogoStorageKey = "greens-healing-clinic-logo";
 const emptyCart: CartItem[] = [];
-const emptyOrders: ProductOrder[] = [];
+
+const orderStatuses: Record<string, ProductOrder["status"]> = {
+    new: "New",
+    preparing: "Preparing",
+    delivered: "Delivered",
+    cancelled: "Cancelled",
+};
+
+interface ProductOrderItemRow {
+    product_id: string | null;
+    product_name_ar: string;
+    product_name_en: string;
+    quantity: number;
+    unit_price: number | string;
+}
+
+interface ProductOrderRow {
+    id: string;
+    customer_name: string;
+    customer_phone: string;
+    delivery_address: string;
+    location_url: string | null;
+    total: number | string;
+    status: string;
+    is_read: boolean;
+    created_at: string;
+    product_order_items?: ProductOrderItemRow[];
+}
+
+function toProductOrder(row: ProductOrderRow): ProductOrder {
+    return {
+        id: row.id,
+        customerName: row.customer_name,
+        customerPhone: row.customer_phone,
+        deliveryAddress: row.delivery_address,
+        locationUrl: row.location_url ?? undefined,
+        items: (row.product_order_items ?? []).map((item) => ({
+            productId: item.product_id ?? "",
+            productNameAr: item.product_name_ar,
+            productNameEn: item.product_name_en,
+            quantity: item.quantity,
+            unitPrice: Number(item.unit_price),
+        })),
+        total: Number(row.total),
+        paymentMethod: "Cash on delivery",
+        status: orderStatuses[row.status] ?? "New",
+        createdAt: row.created_at,
+        isRead: row.is_read,
+    };
+}
+
+const productOrderSelect = "*, product_order_items(product_id, product_name_ar, product_name_en, quantity, unit_price)";
 
 interface ClinicDataContextValue {
     isLoaded: boolean;
@@ -49,8 +99,8 @@ interface ClinicDataContextValue {
     updateCartQuantity: (productId: string, quantity: number) => void;
     removeFromCart: (productId: string) => void;
     clearCart: () => void;
-    submitProductOrder: (customer: Pick<ProductOrder, "customerName" | "customerPhone" | "deliveryAddress">) => ProductOrder | null;
-    markProductOrdersRead: () => void;
+    submitProductOrder: (customer: Pick<ProductOrder, "customerName" | "customerPhone" | "deliveryAddress" | "locationUrl">) => Promise<ProductOrder>;
+    markProductOrdersRead: () => Promise<void>;
 }
 
 const ClinicDataContext = createContext<ClinicDataContextValue | undefined>(undefined);
@@ -117,7 +167,7 @@ export function ClinicDataProvider({ children }: { children: ReactNode }) {
     const [treatments, setTreatments] = useState<Treatment[]>([]);
     const [appointments, setAppointments] = useState<ClinicAppointment[]>([]);
     const [cartItems, setCartItems] = useLocalStorageData(cartStorageKey, emptyCart);
-    const [productOrders, setProductOrders] = useLocalStorageData(ordersStorageKey, emptyOrders);
+    const [productOrders, setProductOrders] = useState<ProductOrder[]>([]);
     const [storedClinicLogo, setStoredClinicLogo] = useLocalStorageString(clinicLogoStorageKey);
     const clinicLogo = storedClinicLogo ?? "";
     const [clinicHours, setClinicHoursState] = useState<ClinicHours | null>(null);
@@ -129,11 +179,13 @@ export function ClinicDataProvider({ children }: { children: ReactNode }) {
         let mounted = true;
         const loadClinicData = async () => {
             const supabase = createClient();
-            const [treatmentResult, productResult, settingsResult, appointmentResult] = await Promise.all([
+            const isAdmin = user?.role === "admin";
+            const [treatmentResult, productResult, settingsResult, appointmentResult, orderResult] = await Promise.all([
                 supabase.from("treatments").select("*").order("name_en"),
                 supabase.from("products").select("*").order("name_en"),
                 supabase.from("clinic_settings").select("*").eq("id", true).maybeSingle(),
                 user ? supabase.from("appointments").select("*, patient_profiles(full_name, email, phone)").order("appointment_date", { ascending: false }) : Promise.resolve({ data: [], error: null }),
+                isAdmin ? supabase.from("product_orders").select(productOrderSelect).order("created_at", { ascending: false }) : Promise.resolve({ data: [], error: null }),
             ]);
             const loadError = treatmentResult.error ?? productResult.error ?? settingsResult.error ?? appointmentResult.error;
             if (loadError) throw loadError;
@@ -188,6 +240,9 @@ export function ClinicDataProvider({ children }: { children: ReactNode }) {
                     isRead: row.is_read,
                 };
             }));
+            // Orders are admin-only and live in their own migration; a failure here shouldn't hide the rest of the dashboard.
+            if (orderResult.error) console.error("Unable to load product orders from Supabase:", orderResult.error.message);
+            setProductOrders(((orderResult.data ?? []) as ProductOrderRow[]).map(toProductOrder));
             setIsLoaded(true);
             setDataError("");
         };
@@ -204,6 +259,26 @@ export function ClinicDataProvider({ children }: { children: ReactNode }) {
             mounted = false;
         };
     }, [authLoaded, user]);
+
+    useEffect(() => {
+        if (user?.role !== "admin") return;
+        const supabase = createClient();
+        const channel = supabase
+            .channel("admin-product-orders")
+            .on("postgres_changes", { event: "INSERT", schema: "public", table: "product_orders" }, (payload) => {
+                // The insert payload has no line items, so fetch the full order.
+                void supabase.from("product_orders").select(productOrderSelect).eq("id", (payload.new as { id: string }).id).single()
+                    .then(({ data, error }) => {
+                        if (error || !data) return;
+                        const order = toProductOrder(data as ProductOrderRow);
+                        setProductOrders((current) => current.some((item) => item.id === order.id) ? current : [order, ...current]);
+                    });
+            })
+            .subscribe();
+        return () => {
+            void supabase.removeChannel(channel);
+        };
+    }, [user?.role]);
 
     const saveTreatment = useCallback(async (treatment: Omit<Treatment, "id">, id?: string) => {
         const values = {
@@ -469,46 +544,41 @@ export function ClinicDataProvider({ children }: { children: ReactNode }) {
         return true;
     }, [appointments, clinicHours, user]);
 
-    const submitProductOrder = useCallback((customer: Pick<ProductOrder, "customerName" | "customerPhone" | "deliveryAddress">) => {
-        if (!cartItems.length || !customer.customerName.trim() || !customer.customerPhone.trim() || !customer.deliveryAddress.trim()) return null;
-
-        const orderItems: ProductOrder["items"] = [];
-        for (const cartItem of cartItems) {
-            const product = products.find((item) => item.id === cartItem.productId && item.active);
-            if (!product || !Number.isInteger(cartItem.quantity) || cartItem.quantity < 1 || cartItem.quantity > product.stock) return null;
-            orderItems.push({
-                productId: product.id,
-                productNameAr: product.arName,
-                productNameEn: product.enName,
-                quantity: cartItem.quantity,
-                unitPrice: product.price,
-            });
-        }
-
-        const order: ProductOrder = {
-            id: `order-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-            customerName: customer.customerName.trim(),
-            customerPhone: customer.customerPhone.trim(),
-            deliveryAddress: customer.deliveryAddress.trim(),
-            items: orderItems,
-            total: orderItems.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0),
-            paymentMethod: "Cash on delivery",
-            status: "New",
-            createdAt: new Date().toISOString(),
-            isRead: false,
-        };
-        const nextOrders = [order, ...productOrders];
-        setProductOrders(nextOrders);
+    const submitProductOrder = useCallback(async (customer: Pick<ProductOrder, "customerName" | "customerPhone" | "deliveryAddress" | "locationUrl">) => {
+        if (!cartItems.length) throw new Error("Your cart is empty.");
+        const { data, error } = await createClient().rpc("create_product_order", {
+            p_customer_name: customer.customerName.trim(),
+            p_customer_phone: customer.customerPhone.trim(),
+            p_delivery_address: customer.deliveryAddress.trim(),
+            p_location_url: customer.locationUrl?.trim() || null,
+            p_items: cartItems.map((item) => ({ product_id: item.productId, quantity: item.quantity })),
+        });
+        if (error) throw error;
+        const created = data as { id: string; total: number | string; created_at: string; items: ProductOrderItemRow[] };
+        const order = toProductOrder({
+            id: created.id,
+            customer_name: customer.customerName.trim(),
+            customer_phone: customer.customerPhone.trim(),
+            delivery_address: customer.deliveryAddress.trim(),
+            location_url: customer.locationUrl?.trim() || null,
+            total: created.total,
+            status: "new",
+            is_read: false,
+            created_at: created.created_at,
+            product_order_items: created.items,
+        });
         setCartItems([]);
         window.dispatchEvent(new CustomEvent("clinic-product-order-created", { detail: order }));
         return order;
-    }, [cartItems, products, productOrders, setCartItems, setProductOrders]);
+    }, [cartItems, setCartItems]);
 
-    const markProductOrdersRead = useCallback(() => {
-        if (productOrders.every((order) => order.isRead)) return;
-        const nextOrders = productOrders.map((order) => ({ ...order, isRead: true }));
-        setProductOrders(nextOrders);
-    }, [productOrders, setProductOrders]);
+    const markProductOrdersRead = useCallback(async () => {
+        const unreadIds = productOrders.filter((order) => !order.isRead).map((order) => order.id);
+        if (!unreadIds.length) return;
+        const { error } = await createClient().from("product_orders").update({ is_read: true }).in("id", unreadIds);
+        if (error) throw error;
+        setProductOrders((current) => current.map((order) => unreadIds.includes(order.id) ? { ...order, isRead: true } : order));
+    }, [productOrders]);
 
     const value = useMemo(
         () => ({ isLoaded, dataError, clinicLogo, clinicHours, products, treatments, appointments, cartItems, productOrders, saveProduct, deleteProduct, adjustProductStock, saveTreatment, deleteTreatment, setClinicLogo, setClinicHours, isAppointmentSlotAvailable, getBookedAppointmentSlots, bookAppointment, markAppointmentsRead, updateAppointmentStatus, addToCart, updateCartQuantity, removeFromCart, clearCart, submitProductOrder, markProductOrdersRead }),

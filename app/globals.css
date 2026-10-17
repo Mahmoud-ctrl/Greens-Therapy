@@ -1,5 +1,9 @@
 @import "tailwindcss";
 
+/* Viewport-height variants, used to keep the home hero above the fold on short laptop screens. */
+@custom-variant short (@media (max-height: 820px));
+@custom-variant shorter (@media (max-height: 700px));
+
 :root {
   --background: #faf6ec;
   --foreground: #2a3320;

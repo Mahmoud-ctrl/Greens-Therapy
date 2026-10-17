@@ -107,12 +107,22 @@ export function SiteHeader() {
                             aria-label={`${isArabic ? "السلة" : "Cart"}: ${cartCount}`}
                             className="relative inline-flex h-10 w-10 items-center justify-center rounded-full text-emerald-900 transition hover:bg-emerald-50"
                         >
-                            <ShoppingBag key={cartAnimationKey} size={20} aria-hidden="true" className={cartAnimationKey > 0 ? "cart-added-pop" : ""} />
+                            <ShoppingBag key={`icon-${cartAnimationKey}`} size={20} aria-hidden="true" className={cartAnimationKey > 0 ? "cart-added-pop" : ""} />
                             {cartCount > 0 ? (
-                                <span key={cartCount} className="cart-count-pop absolute -end-0.5 -top-0.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-honey-500 px-1 text-[10px] font-bold text-white">
+                                <span key={`count-${cartCount}`} className="cart-count-pop absolute -end-0.5 -top-0.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-honey-500 px-1 text-[10px] font-bold text-white">
                                     {cartCount}
                                 </span>
                             ) : null}
+                        </Link>
+                    ) : null}
+
+                    {user && !isStaff ? (
+                        <Link
+                            href="/my-bookings"
+                            aria-current={isActive("/my-bookings") ? "page" : undefined}
+                            className={`hidden rounded-full px-3 py-2 text-sm font-medium transition md:inline-flex ${isActive("/my-bookings") ? "bg-emerald-50 text-emerald-900" : "text-slate-600 hover:text-emerald-800"}`}
+                        >
+                            {isArabic ? "حجوزاتي" : "My bookings"}
                         </Link>
                     ) : null}
 
@@ -164,6 +174,16 @@ export function SiteHeader() {
                                 {item.label}
                             </Link>
                         ))}
+                        {user && !isStaff ? (
+                            <Link
+                                href="/my-bookings"
+                                onClick={() => setIsOpen(false)}
+                                aria-current={isActive("/my-bookings") ? "page" : undefined}
+                                className={`rounded-2xl px-4 py-3 text-base font-medium ${isActive("/my-bookings") ? "bg-emerald-50 text-emerald-900" : "text-slate-700"}`}
+                            >
+                                {isArabic ? "حجوزاتي" : "My bookings"}
+                            </Link>
+                        ) : null}
                         {user ? (
                             <button
                                 type="button"

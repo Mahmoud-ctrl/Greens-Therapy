@@ -3,15 +3,18 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { Banknote, CheckCircle2, MessageCircle, Minus, Plus, ShoppingBag, Trash2 } from "lucide-react";
+import { Banknote, CheckCircle2, ExternalLink, MapPin, MessageCircle, Minus, Plus, ShoppingBag, Trash2 } from "lucide-react";
 
 import { useAuth } from "@/components/auth/auth-provider";
 import { useClinicData } from "@/components/providers/clinic-data-provider";
 import { useLocale } from "@/components/providers/locale-provider";
 import { ItemVisual } from "@/components/ui/item-visual";
+import { LoadingButton } from "@/components/ui/loading-button";
 import { PageHeader } from "@/components/ui/section-shell";
 import { clinicWhatsAppNumber } from "@/lib/clinic-contact";
 import { formatCurrency } from "@/lib/i18n";
+import type { ProductOrder } from "@/types/clinic";
+import { toGoogleMapsUrl } from "@/lib/location";
 
 export default function CartPage() {
     const { locale } = useLocale();
@@ -23,9 +26,13 @@ export default function CartPage() {
     const customerName = customerNameDraft ?? user?.name ?? "";
     const [customerPhone, setCustomerPhone] = useState("");
     const [deliveryAddress, setDeliveryAddress] = useState("");
+    const [locationUrl, setLocationUrl] = useState("");
+    const [isLocating, setIsLocating] = useState(false);
+    const [locationError, setLocationError] = useState("");
     const [orderPlacedId, setOrderPlacedId] = useState<string | null>(null);
     const [whatsAppOrderUrl, setWhatsAppOrderUrl] = useState("");
     const [orderError, setOrderError] = useState("");
+    const [isPlacingOrder, setIsPlacingOrder] = useState(false);
     const isArabic = locale === "ar";
     const cartProducts = cartItems.map((item) => ({
         item,
@@ -37,13 +44,46 @@ export default function CartPage() {
         if (isAuthLoaded && isStaff) router.replace("/dashboard");
     }, [isAuthLoaded, isStaff, router]);
 
-    const confirmOrder = (event: React.FormEvent<HTMLFormElement>) => {
+    const shareLocation = () => {
+        setLocationError("");
+        // Browsers only expose geolocation on HTTPS (or localhost).
+        if (!window.isSecureContext || !("geolocation" in navigator)) {
+            setLocationError(isArabic ? "مشاركة الموقع غير مدعومة في هذا المتصفح. الصق رابط خرائط Google بدلاً من ذلك." : "Location sharing isn't available in this browser. Paste a Google Maps link instead.");
+            return;
+        }
+        setIsLocating(true);
+        navigator.geolocation.getCurrentPosition(
+            ({ coords }) => {
+                setLocationUrl(`https://www.google.com/maps?q=${coords.latitude.toFixed(6)},${coords.longitude.toFixed(6)}`);
+                setIsLocating(false);
+            },
+            (positionError) => {
+                setIsLocating(false);
+                setLocationError(positionError.code === positionError.PERMISSION_DENIED
+                    ? isArabic ? "تم رفض الإذن بالوصول إلى الموقع. فعّله من إعدادات المتصفح أو الصق رابط الموقع." : "Location permission was denied. Allow it in your browser settings, or paste a map link."
+                    : positionError.code === positionError.TIMEOUT
+                        ? isArabic ? "استغرق تحديد الموقع وقتاً طويلاً. حاول مرة أخرى." : "Finding your location took too long. Please try again."
+                        : isArabic ? "تعذر تحديد موقعك. حاول مرة أخرى أو الصق رابط الموقع." : "Couldn't find your location. Try again, or paste a map link.");
+            },
+            { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 },
+        );
+    };
+
+    const confirmOrder = async (event: React.FormEvent<HTMLFormElement>) => {
         event.preventDefault();
         setOrderError("");
-        const order = submitProductOrder({ customerName, customerPhone, deliveryAddress });
-        if (!order) {
-            setOrderError(isArabic ? "تعذر تأكيد الطلب. تحقق من توفر المنتجات وحاول مرة أخرى." : "Could not confirm this order. Check product availability and try again.");
+        setIsPlacingOrder(true);
+        let order: ProductOrder;
+        try {
+            order = await submitProductOrder({ customerName, customerPhone, deliveryAddress, locationUrl: toGoogleMapsUrl(locationUrl) });
+        } catch (cause) {
+            const reason = cause instanceof Error ? cause.message : "";
+            setOrderError(isArabic
+                ? `تعذر تأكيد الطلب. ${reason ? `(${reason}) ` : ""}تحقق من توفر المنتجات وحاول مرة أخرى.`
+                : `Could not place this order.${reason ? ` ${reason}` : ""} Check product availability and try again.`);
             return;
+        } finally {
+            setIsPlacingOrder(false);
         }
         const message = [
             isArabic ? "طلب جديد من Greens Healing Therapy" : "New order for Greens Healing Therapy",
@@ -51,6 +91,7 @@ export default function CartPage() {
             `${isArabic ? "الاسم" : "Name"}: ${order.customerName}`,
             `${isArabic ? "الهاتف" : "Phone"}: ${order.customerPhone}`,
             `${isArabic ? "عنوان التوصيل" : "Delivery address"}: ${order.deliveryAddress}`,
+            ...(order.locationUrl ? [`${isArabic ? "الموقع على الخريطة" : "Map location"}: ${order.locationUrl}`] : []),
             "",
             isArabic ? "المنتجات:" : "Products:",
             ...order.items.map((item) => `- ${isArabic ? item.productNameAr : item.productNameEn} x${item.quantity} = $${(item.unitPrice * item.quantity).toFixed(2)}`),
@@ -130,9 +171,43 @@ export default function CartPage() {
                                 <label className="block space-y-1.5 text-sm font-medium text-slate-700">{isArabic ? "الاسم الكامل" : "Full name"}<input required autoComplete="name" value={customerName} onChange={(event) => setCustomerNameDraft(event.target.value)} className="field" /></label>
                                 <label className="block space-y-1.5 text-sm font-medium text-slate-700">{isArabic ? "رقم الهاتف" : "Phone number"}<input required type="tel" dir="ltr" autoComplete="tel" value={customerPhone} onChange={(event) => setCustomerPhone(event.target.value)} className="field text-start" /></label>
                                 <label className="block space-y-1.5 text-sm font-medium text-slate-700">{isArabic ? "عنوان التوصيل" : "Delivery address"}<textarea required autoComplete="street-address" rows={3} value={deliveryAddress} onChange={(event) => setDeliveryAddress(event.target.value)} className="field resize-y" /></label>
+                                <div className="space-y-1.5">
+                                    <label htmlFor="order-location" className="block text-sm font-medium text-slate-700">
+                                        {isArabic ? "الموقع على الخريطة" : "Map location"} <span className="font-normal text-slate-400">({isArabic ? "اختياري" : "optional"})</span>
+                                    </label>
+                                    <div className="flex gap-2">
+                                        <input
+                                            id="order-location"
+                                            type="text"
+                                            dir="auto"
+                                            autoComplete="off"
+                                            value={locationUrl}
+                                            onChange={(event) => { setLocationUrl(event.target.value); setLocationError(""); }}
+                                            placeholder={isArabic ? "رابط خرائط Google أو معلم قريب" : "Maps link, coordinates or landmark"}
+                                            className="field min-w-0 flex-1 text-start text-sm"
+                                        />
+                                        <LoadingButton
+                                            type="button"
+                                            pending={isLocating}
+                                            icon={<MapPin size={16} aria-hidden="true" />}
+                                            onClick={shareLocation}
+                                            title={isArabic ? "استخدام موقعي الحالي" : "Use my current location"}
+                                            className="inline-flex shrink-0 items-center gap-1.5 rounded-xl border border-emerald-700 px-3 text-sm font-semibold text-emerald-800 transition hover:bg-emerald-50 disabled:opacity-60"
+                                        >
+                                            {isLocating ? (isArabic ? "جارٍ التحديد..." : "Locating...") : (isArabic ? "موقعي" : "My location")}
+                                        </LoadingButton>
+                                    </div>
+                                    {locationUrl.trim() && !locationError ? (
+                                        <a href={toGoogleMapsUrl(locationUrl)} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700 underline underline-offset-2">
+                                            <ExternalLink size={12} aria-hidden="true" />
+                                            {isArabic ? "معاينة على الخريطة" : "Preview on map"}
+                                        </a>
+                                    ) : null}
+                                    {locationError ? <p role="alert" className="text-xs leading-5 text-red-700">{locationError}</p> : null}
+                                </div>
                                 <div className="flex items-center gap-2 rounded-xl bg-honey-50 px-3 py-2.5 text-sm font-medium text-honey-700"><Banknote size={16} aria-hidden="true" />{isArabic ? "الدفع نقداً عند الاستلام" : "Cash on delivery"}</div>
                                 {orderError ? <p role="alert" className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{orderError}</p> : null}
-                                <button type="submit" disabled={cartProducts.some((row) => !row.product)} className="btn-primary w-full py-3.5 text-base">{isArabic ? "تأكيد الطلب" : "Place order"}</button>
+                                <LoadingButton type="submit" pending={isPlacingOrder} disabled={cartProducts.some((row) => !row.product)} className="btn-primary w-full py-3.5 text-base">{isPlacingOrder ? (isArabic ? "جارٍ إرسال الطلب..." : "Placing order...") : (isArabic ? "تأكيد الطلب" : "Place order")}</LoadingButton>
                             </form>
                         </aside>
                     </div>

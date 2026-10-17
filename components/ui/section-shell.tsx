@@ -1,5 +1,7 @@
 import type { ReactNode } from "react";
 
+import { CardSkeleton, LoadingRegion } from "@/components/ui/skeleton";
+
 interface SectionShellProps {
     eyebrow?: string;
     title: string;
@@ -45,13 +47,11 @@ export function PageHeader({ eyebrow, title, description }: { eyebrow: string; t
     );
 }
 
-export function CardSkeletons({ count }: { count: number }) {
+export function CardSkeletons({ count, variant, label }: { count: number; variant: "product" | "treatment"; label: string }) {
     return (
-        <div className={`grid gap-6 sm:grid-cols-2 ${count === 4 ? "lg:grid-cols-4" : "lg:grid-cols-3"}`}>
-            {Array.from({ length: count }, (_, index) => (
-                <div key={index} className="h-80 animate-pulse rounded-3xl bg-slate-100" />
-            ))}
-        </div>
+        <LoadingRegion label={label} className={`grid gap-6 sm:grid-cols-2 ${variant === "product" ? "lg:grid-cols-4" : "lg:grid-cols-3"}`}>
+            {Array.from({ length: count }, (_, index) => <CardSkeleton key={index} variant={variant} />)}
+        </LoadingRegion>
     );
 }
 

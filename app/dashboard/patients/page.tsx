@@ -4,9 +4,10 @@ import { useMemo } from "react";
 
 import { useClinicData } from "@/components/providers/clinic-data-provider";
 import { useLocale } from "@/components/providers/locale-provider";
+import { LoadingRegion, PageTitleSkeleton, TableSkeleton } from "@/components/ui/skeleton";
 
 export default function DashboardPatientsPage() {
-    const { appointments } = useClinicData();
+    const { appointments, isLoaded } = useClinicData();
     const { locale } = useLocale();
     const isArabic = locale === "ar";
     const patients = useMemo(() => {
@@ -26,6 +27,15 @@ export default function DashboardPatientsPage() {
         }
         return Array.from(patientMap.values()).sort((first, second) => first.name.localeCompare(second.name));
     }, [appointments]);
+
+    if (!isLoaded) {
+        return (
+            <LoadingRegion label={isArabic ? "جارٍ تحميل المرضى..." : "Loading patients..."} className="space-y-6">
+                <PageTitleSkeleton />
+                <TableSkeleton rows={6} columns={4} />
+            </LoadingRegion>
+        );
+    }
 
     return (
         <div className="space-y-6">

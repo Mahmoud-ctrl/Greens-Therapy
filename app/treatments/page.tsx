@@ -24,7 +24,7 @@ export default function TreatmentsPage() {
                     : "Cupping, massage, dry needling and holistic sessions, delivered by a certified healer in a calm setting."}
             />
             <div className="mx-auto max-w-7xl px-4 py-14 sm:px-6 lg:px-8">
-                {!isLoaded ? <CardSkeletons count={3} /> : activeTreatments.length === 0 ? (
+                {!isLoaded ? <CardSkeletons count={3} variant="treatment" label={isArabic ? "جارٍ تحميل العلاجات..." : "Loading treatments..."} /> : activeTreatments.length === 0 ? (
                     <EmptyState title={isArabic ? "العلاجات قادمة قريباً" : "Treatments coming soon"} description={isArabic ? "تواصل معنا عبر واتساب لمعرفة المزيد." : "Reach out on WhatsApp to learn more."} />
                 ) : (
                     <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">

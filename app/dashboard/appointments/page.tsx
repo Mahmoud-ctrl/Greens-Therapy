@@ -5,12 +5,15 @@ import { useEffect, useState } from "react";
 import { useAuth } from "@/components/auth/auth-provider";
 import { useClinicData } from "@/components/providers/clinic-data-provider";
 import { useLocale } from "@/components/providers/locale-provider";
+import { LoadingButton } from "@/components/ui/loading-button";
+import { LoadingRegion, PageTitleSkeleton, TableSkeleton } from "@/components/ui/skeleton";
 
 export default function DashboardAppointmentsPage() {
-    const { appointments, markAppointmentsRead, updateAppointmentStatus } = useClinicData();
+    const { appointments, isLoaded, markAppointmentsRead, updateAppointmentStatus } = useClinicData();
     const { user } = useAuth();
     const { locale } = useLocale();
     const [actionError, setActionError] = useState("");
+    const [pendingAction, setPendingAction] = useState<string | null>(null);
     const isArabic = locale === "ar";
     const isAdmin = user?.role === "admin";
 
@@ -21,13 +24,25 @@ export default function DashboardAppointmentsPage() {
     }, [isArabic, markAppointmentsRead]);
 
     const handleStatusUpdate = async (appointmentId: string, status: "Confirmed" | "Cancelled") => {
+        setPendingAction(`${status}:${appointmentId}`);
         try {
             await updateAppointmentStatus(appointmentId, status);
             setActionError("");
         } catch (cause) {
             setActionError(cause instanceof Error ? cause.message : (isArabic ? "تعذر تحديث الموعد." : "Unable to update the appointment."));
+        } finally {
+            setPendingAction(null);
         }
     };
+
+    if (!isLoaded) {
+        return (
+            <LoadingRegion label={isArabic ? "جارٍ تحميل المواعيد..." : "Loading appointments..."} className="space-y-6">
+                <PageTitleSkeleton />
+                <TableSkeleton rows={6} columns={isAdmin ? 7 : 6} />
+            </LoadingRegion>
+        );
+    }
 
     const rows = appointments.map((appointment) => ({
         key: appointment.id,
@@ -79,7 +94,7 @@ export default function DashboardAppointmentsPage() {
                                             : appointment.status}
                                     </span>
                                 </td>
-                                {isAdmin ? <td className="px-4 py-3">{appointment.status === "Pending" ? <div className="flex gap-2"><button type="button" onClick={() => void handleStatusUpdate(appointment.appointmentId, "Confirmed")} className="rounded-md bg-emerald-700 px-2.5 py-1.5 text-xs font-semibold text-white">{isArabic ? "تأكيد" : "Confirm"}</button><button type="button" onClick={() => void handleStatusUpdate(appointment.appointmentId, "Cancelled")} className="rounded-md border border-red-300 px-2.5 py-1.5 text-xs font-semibold text-red-700">{isArabic ? "رفض" : "Reject"}</button></div> : <span className="text-slate-400">—</span>}</td> : null}
+                                {isAdmin ? <td className="px-4 py-3">{appointment.status === "Pending" ? <div className="flex gap-2"><LoadingButton type="button" pending={pendingAction === `Confirmed:${appointment.appointmentId}`} disabled={pendingAction?.endsWith(appointment.appointmentId)} onClick={() => void handleStatusUpdate(appointment.appointmentId, "Confirmed")} className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-700 px-2.5 py-1.5 text-xs font-semibold text-white disabled:opacity-60">{isArabic ? "تأكيد" : "Confirm"}</LoadingButton><LoadingButton type="button" pending={pendingAction === `Cancelled:${appointment.appointmentId}`} disabled={pendingAction?.endsWith(appointment.appointmentId)} onClick={() => void handleStatusUpdate(appointment.appointmentId, "Cancelled")} className="inline-flex items-center gap-1.5 rounded-lg border border-red-300 px-2.5 py-1.5 text-xs font-semibold text-red-700 disabled:opacity-60">{isArabic ? "رفض" : "Reject"}</LoadingButton></div> : <span className="text-slate-400">—</span>}</td> : null}
                             </tr>
                         ))}
                     </tbody>

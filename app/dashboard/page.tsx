@@ -14,9 +14,9 @@ export default function DashboardHomePage() {
         .sort((first, second) => `${first.date}T${first.startTime}`.localeCompare(`${second.date}T${second.startTime}`))
         .slice(0, 4);
     const metrics = [
-        { label: isArabic ? "قيد الانتظار" : "Pending appointments", value: appointments.filter((item) => item.status === "Pending").length, tone: "bg-amber-50 border-amber-200" },
+        { label: isArabic ? "قيد الانتظار" : "Pending appointments", value: appointments.filter((item) => item.status === "Pending").length, tone: "bg-honey-50 border-honey-100" },
         { label: isArabic ? "مؤكدة" : "Confirmed appointments", value: appointments.filter((item) => item.status === "Confirmed").length, tone: "bg-emerald-50 border-emerald-200" },
-        { label: isArabic ? "طلبات جديدة" : "New product orders", value: productOrders.filter((order) => order.status === "New").length, tone: "bg-sky-50 border-sky-200" },
+        { label: isArabic ? "طلبات جديدة" : "New product orders", value: productOrders.filter((order) => order.status === "New").length, tone: "bg-[#f6efdf] border-clinic-border" },
         { label: isArabic ? "منتجات وعلاجات" : "Catalog items", value: products.length + treatments.length, tone: "bg-slate-100 border-slate-200" },
     ];
 
@@ -31,9 +31,9 @@ export default function DashboardHomePage() {
 
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                 {metrics.map((metric) => (
-                    <div key={metric.label} className={`rounded-lg border p-4 ${metric.tone}`}>
+                    <div key={metric.label} className={`rounded-2xl border p-5 ${metric.tone}`}>
                         <div className="text-sm text-slate-600">{metric.label}</div>
-                        <div className="mt-2 text-2xl font-bold text-emerald-950">{metric.value}</div>
+                        <div className="mt-2 font-display text-4xl font-semibold text-emerald-950">{metric.value}</div>
                     </div>
                 ))}
             </div>

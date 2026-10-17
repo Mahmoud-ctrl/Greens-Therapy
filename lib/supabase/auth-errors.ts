@@ -13,29 +13,27 @@ export function getAuthErrorMessage(error: unknown, locale: Locale, context: Aut
     const code = errorCode(error);
     const isArabic = locale === "ar";
 
-    if (context === "register" && (
-        code === "over_email_send_rate_limit"
-        || normalizedMessage.includes("email rate limit")
-        || normalizedMessage.includes("only request this after")
-    )) {
+    // Only reachable while "Confirm email" is still enabled in Supabase Auth, or for accounts
+    // created before it was disabled.
+    if (code === "email_not_confirmed" || normalizedMessage.includes("email not confirmed")) {
         return isArabic
-            ? "وصلت مؤقتاً إلى حد إرسال رسائل التسجيل. لا تعاود المحاولة الآن؛ تحقق من رسائل التأكيد التي أُرسلت سابقاً، أو انتظر قبل المحاولة مجدداً."
-            : "Supabase has temporarily limited registration emails. Don’t retry now; check for a confirmation email sent earlier, or wait before trying again.";
+            ? "تعذر تفعيل هذا الحساب. يرجى التواصل مع العيادة."
+            : "This account could not be activated. Please contact the clinic.";
     }
 
-    if (context === "login" && (
-        code === "email_not_confirmed"
-        || normalizedMessage.includes("email not confirmed")
+    if (context === "register" && (
+        code === "user_already_exists"
+        || normalizedMessage.includes("user already registered")
     )) {
         return isArabic
-            ? "يجب تأكيد البريد الإلكتروني قبل تسجيل الدخول. تحقق من صندوق الوارد ومجلد الرسائل غير المرغوب فيها."
-            : "Confirm your email before signing in. Check your inbox and spam folder for the confirmation message.";
+            ? "يوجد حساب بهذا البريد الإلكتروني بالفعل. سجّل الدخول بدلاً من ذلك."
+            : "An account with this email already exists. Sign in instead.";
     }
 
     if (context === "login" && normalizedMessage.includes("invalid login credentials")) {
         return isArabic
-            ? "لم يتم العثور على حساب بهذه البيانات. إذا سجلت للتو، أكّد بريدك الإلكتروني أولاً، ثم تحقق من البريد وكلمة المرور."
-            : "Supabase could not verify this email and password. If you just registered, confirm your email first, then check that you’re using the same email and password.";
+            ? "البريد الإلكتروني أو كلمة المرور غير صحيحة."
+            : "Incorrect email or password.";
     }
 
     if (message) return message;

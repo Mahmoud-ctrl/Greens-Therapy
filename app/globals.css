@@ -1,31 +1,54 @@
 @import "tailwindcss";
 
 :root {
-  --background: #f3f8f6;
-  --foreground: #19372f;
-  --card: #ffffff;
-  --muted: #5b716b;
-  --clinic-brand: #176b52;
-  --clinic-brand-strong: #12543f;
-  --clinic-accent: #287d7d;
-  --clinic-border: #d8e6e1;
+  --background: #faf6ec;
+  --foreground: #2a3320;
+  --card: #fffdf8;
+  --muted: #6b6f5c;
+  --clinic-brand: #4a5d2e;
+  --clinic-brand-strong: #3d4d25;
+  --clinic-accent: #c98a1b;
+  --clinic-border: #e7dfc9;
 }
 
+/*
+ * The app's markup uses Tailwind's emerald/slate names throughout (including the dashboard),
+ * so the brand palette is applied by remapping those scales: emerald → olive, slate → warm stone.
+ */
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --color-emerald-50: #eff7f3;
-  --color-emerald-100: #dceee5;
-  --color-emerald-200: #bfdfcf;
-  --color-emerald-300: #98cbb1;
-  --color-emerald-600: #2b8062;
+  --color-card: var(--card);
+  --color-emerald-50: #f3f4ea;
+  --color-emerald-100: #e6e9d4;
+  --color-emerald-200: #cfd5b0;
+  --color-emerald-300: #b0ba85;
+  --color-emerald-500: #6f8448;
+  --color-emerald-600: #5a6e3a;
   --color-emerald-700: var(--clinic-brand);
   --color-emerald-800: var(--clinic-brand-strong);
-  --color-emerald-900: #174638;
-  --color-emerald-950: #10382f;
+  --color-emerald-900: #2f3c1d;
+  --color-emerald-950: #222c14;
+  --color-teal-700: #6f8448;
+  --color-slate-50: #faf8f2;
+  --color-slate-100: #f2eee3;
+  --color-slate-200: #e7e1d2;
+  --color-slate-300: #d6cfbd;
+  --color-slate-400: #aaa28d;
+  --color-slate-500: #7d7766;
+  --color-slate-600: #5f5a4b;
+  --color-slate-700: #474336;
+  --color-slate-800: #343126;
+  --color-slate-900: #24221a;
+  --color-honey-50: #fbf3df;
+  --color-honey-100: #f5e3b5;
+  --color-honey-300: #e6b85a;
+  --color-honey-500: var(--clinic-accent);
+  --color-honey-700: #94620f;
   --color-clinic-accent: var(--clinic-accent);
   --color-clinic-border: var(--clinic-border);
-  --font-sans: "Segoe UI", Tahoma, Arial, sans-serif;
+  --font-sans: var(--font-plex-arabic), "Segoe UI", Tahoma, Arial, sans-serif;
+  --font-display: var(--font-cormorant), var(--font-amiri), Georgia, serif;
   --font-mono: "SFMono-Regular", "Consolas", monospace;
 }
 
@@ -36,7 +59,7 @@ html {
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: "Segoe UI", Tahoma, Arial, sans-serif;
+  font-family: var(--font-sans);
 }
 
 * {
@@ -57,6 +80,108 @@ input,
 select,
 textarea {
   font: inherit;
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--font-display);
+  letter-spacing: -0.01em;
+}
+
+/* Amiri sits small next to Latin text; give Arabic headings a little more room. */
+:lang(ar) h1,
+:lang(ar) h2,
+:lang(ar) h3 {
+  letter-spacing: 0;
+  line-height: 1.35;
+}
+
+@layer components {
+  .btn-primary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    border-radius: 9999px;
+    background: var(--clinic-brand);
+    padding: 0.75rem 1.5rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: #fffdf8;
+    transition: background-color 150ms, transform 150ms;
+  }
+
+  .btn-primary:hover {
+    background: var(--clinic-brand-strong);
+  }
+
+  .btn-primary:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+  }
+
+  .btn-secondary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    border-radius: 9999px;
+    border: 1px solid var(--clinic-border);
+    background: var(--card);
+    padding: 0.75rem 1.5rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--clinic-brand-strong);
+    transition: border-color 150ms, background-color 150ms;
+  }
+
+  .btn-secondary:hover {
+    border-color: var(--clinic-brand);
+    background: #f3f4ea;
+  }
+
+  .field {
+    width: 100%;
+    border-radius: 0.875rem;
+    border: 1px solid var(--clinic-border);
+    background: var(--card);
+    padding: 0.75rem 1rem;
+    font-size: 0.9375rem;
+    color: var(--foreground);
+    transition: border-color 150ms, box-shadow 150ms;
+  }
+
+  .field:focus {
+    outline: none;
+    border-color: var(--clinic-brand);
+    box-shadow: 0 0 0 3px rgb(74 93 46 / 0.15);
+  }
+
+  .eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--clinic-accent);
+  }
+
+  .eyebrow::before {
+    content: "";
+    width: 1.5rem;
+    height: 1px;
+    background: currentColor;
+  }
+
+  .surface-card {
+    border-radius: 1.5rem;
+    border: 1px solid var(--clinic-border);
+    background: var(--card);
+    box-shadow: 0 1px 2px rgb(42 51 32 / 0.04), 0 8px 24px -12px rgb(42 51 32 / 0.12);
+  }
 }
 
 @keyframes cart-added-pop {
@@ -103,5 +228,9 @@ textarea {
   .cart-added-pop,
   .cart-count-pop {
     animation: none;
+  }
+
+  html {
+    scroll-behavior: auto;
   }
 }

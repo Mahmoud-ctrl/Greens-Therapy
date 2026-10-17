@@ -1,12 +1,14 @@
 "use client";
 
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
+import { CalendarDays, Clock } from "lucide-react";
 
 import { useAuth } from "@/components/auth/auth-provider";
 import { useClinicData } from "@/components/providers/clinic-data-provider";
 import { useLocale } from "@/components/providers/locale-provider";
 import { clinicWhatsAppNumber } from "@/lib/clinic-contact";
+import { formatCurrency, formatDuration } from "@/lib/i18n";
 
 function dateKey(date: Date) {
     return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
@@ -39,7 +41,7 @@ export function BookingFlow() {
     const dates = useMemo(() => {
         if (!clinicHours || clinicHours.slotInterval < 1) return [];
         const today = new Date();
-        const availableDates: Array<{ value: string; label: string }> = [];
+        const availableDates: Array<{ value: string; label: string; weekday: string; day: string }> = [];
         for (let offset = 0; offset < 30; offset += 1) {
             const date = new Date(today.getFullYear(), today.getMonth(), today.getDate() + offset, 12);
             if (!clinicHours.workingDays.includes(date.getDay())) continue;
@@ -62,6 +64,8 @@ export function BookingFlow() {
                         day: "numeric",
                         month: "short",
                     }).format(date),
+                    weekday: new Intl.DateTimeFormat(isArabic ? "ar" : "en", { weekday: "short" }).format(date),
+                    day: new Intl.DateTimeFormat(isArabic ? "ar" : "en", { day: "numeric", month: "short" }).format(date),
                 });
             }
         }
@@ -150,57 +154,152 @@ export function BookingFlow() {
     };
 
     if (!clinicHours) {
-        return <div className="mx-auto max-w-xl rounded-xl border border-clinic-border bg-white p-6 text-center"><h2 className="text-lg font-bold text-emerald-950">{isArabic ? "ساعات الحجز غير محددة بعد" : "Booking hours are not set yet"}</h2><p className="mt-2 text-sm leading-6 text-slate-600">{isArabic ? "ستظهر المواعيد هنا بعد أن تحدد العيادة أيام وساعات العمل." : "Available appointment times will appear here after the clinic sets its working days and hours."}</p></div>;
+        return (
+            <div className="surface-card mx-auto max-w-xl p-8 text-center">
+                <CalendarDays className="mx-auto text-emerald-700" size={32} strokeWidth={1.5} aria-hidden="true" />
+                <h2 className="mt-4 text-3xl font-semibold text-emerald-950">{isArabic ? "ساعات الحجز غير محددة بعد" : "Booking hours are not set yet"}</h2>
+                <p className="mt-2 text-sm leading-7 text-slate-600">{isArabic ? "ستظهر المواعيد هنا بعد أن تحدد العيادة أيام وساعات العمل." : "Available appointment times will appear here after the clinic sets its working days and hours."}</p>
+            </div>
+        );
     }
 
     if (treatments.length === 0) {
-        return <div className="mx-auto max-w-xl rounded-xl border border-clinic-border bg-white p-6 text-center text-sm text-slate-600">{isArabic ? "لا توجد علاجات متاحة للحجز حالياً." : "There are no treatments available to book."}</div>;
+        return <div className="surface-card mx-auto max-w-xl p-8 text-center text-sm text-slate-600">{isArabic ? "لا توجد علاجات متاحة للحجز حالياً." : "There are no treatments available to book."}</div>;
     }
 
     return (
-        <form onSubmit={confirmBooking} className="mx-auto grid max-w-4xl gap-6 lg:grid-cols-[1fr_320px]">
-            <div className="space-y-6 rounded-xl border border-clinic-border bg-white p-5 sm:p-6">
-                <label className="block space-y-2 text-sm font-semibold text-slate-800">
-                    {isArabic ? "اختر العلاج" : "Choose a treatment"}
-                    <select value={treatment?.id ?? ""} onChange={(event) => { setTreatmentId(event.target.value); setSelectedTime(""); setError(""); }} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-3 text-sm font-normal focus:border-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-100">
-                        {treatments.map((item) => <option key={item.id} value={item.id}>{isArabic ? item.arName : item.enName} · {item.duration} {isArabic ? "دقيقة" : "min"} · ${item.price}</option>)}
-                    </select>
-                </label>
-
-                <fieldset>
-                    <legend className="mb-2 text-sm font-semibold text-slate-800">{isArabic ? "اختر يوماً متاحاً" : "Choose an available day"}</legend>
-                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                        {dates.map((date) => <button key={date.value} type="button" onClick={() => { setRequestedDate(date.value); setSelectedTime(""); setError(""); }} className={`rounded-lg border px-3 py-3 text-sm font-medium transition ${selectedDate === date.value ? "border-emerald-700 bg-emerald-50 text-emerald-950" : "border-clinic-border bg-white text-slate-700 hover:border-emerald-500"}`}>{date.label}</button>)}
+        <form onSubmit={confirmBooking} className="grid gap-8 lg:grid-cols-[1fr_340px]">
+            <div className="min-w-0 space-y-10">
+                <fieldset className="min-w-0">
+                    <legend className="flex items-center gap-3 text-lg font-semibold text-emerald-950">
+                        <StepNumber value={1} />
+                        {isArabic ? "اختر العلاج" : "Choose a treatment"}
+                    </legend>
+                    <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                        {treatments.map((item) => {
+                            const selected = item.id === treatment?.id;
+                            return (
+                                <button
+                                    key={item.id}
+                                    type="button"
+                                    aria-pressed={selected}
+                                    onClick={() => { setTreatmentId(item.id); setSelectedTime(""); setError(""); }}
+                                    className={`flex items-start justify-between gap-3 rounded-2xl border p-4 text-start transition ${selected ? "border-emerald-700 bg-emerald-50 ring-1 ring-emerald-700" : "border-clinic-border bg-card hover:border-emerald-500"}`}
+                                >
+                                    <span>
+                                        <span className="block font-semibold text-emerald-950">{isArabic ? item.arName : item.enName}</span>
+                                        <span className="mt-1 flex items-center gap-1.5 text-sm text-slate-500">
+                                            <Clock size={14} aria-hidden="true" />
+                                            {formatDuration(item.duration, locale)}
+                                        </span>
+                                    </span>
+                                    <span className="font-semibold text-emerald-800">{formatCurrency(item.price, locale)}</span>
+                                </button>
+                            );
+                        })}
                     </div>
-                    {dates.length === 0 ? <p className="rounded-lg bg-[#eff7f3] p-3 text-sm text-slate-600">{isArabic ? "لا توجد أيام متاحة خلال الثلاثين يوماً القادمة." : "No available days in the next 30 days."}</p> : null}
                 </fieldset>
 
-                <fieldset>
-                    <legend className="mb-2 text-sm font-semibold text-slate-800">{isArabic ? "اختر وقتاً متاحاً" : "Choose an available time"}</legend>
-                    <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
-                        {slots.map((slot) => <button key={slot.time} type="button" disabled={!slot.available} onClick={() => { setSelectedTime(slot.time); setError(""); }} className={`rounded-lg border px-3 py-3 text-sm font-semibold ${!slot.available ? "cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400 line-through" : selectedTime === slot.time ? "border-emerald-700 bg-emerald-700 text-white" : "border-clinic-border bg-white text-emerald-900 hover:border-emerald-600"}`}>{slot.time}</button>)}
-                    </div>
-                    {slots.length === 0 && selectedDate ? <p className="text-sm text-slate-500">{isArabic ? "لا توجد أوقات متاحة لهذا اليوم." : "No available times for this day."}</p> : null}
+                <fieldset className="min-w-0">
+                    <legend className="flex items-center gap-3 text-lg font-semibold text-emerald-950">
+                        <StepNumber value={2} />
+                        {isArabic ? "اختر اليوم" : "Pick a day"}
+                    </legend>
+                    {dates.length === 0 ? (
+                        <p className="mt-4 rounded-2xl bg-slate-100 p-4 text-sm text-slate-600">{isArabic ? "لا توجد أيام متاحة خلال الثلاثين يوماً القادمة." : "No available days in the next 30 days."}</p>
+                    ) : (
+                        <div className="-mx-4 mt-4 flex gap-2 overflow-x-auto px-4 pb-2 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0">
+                            {dates.map((date) => {
+                                const selected = selectedDate === date.value;
+                                return (
+                                    <button
+                                        key={date.value}
+                                        type="button"
+                                        aria-pressed={selected}
+                                        onClick={() => { setRequestedDate(date.value); setSelectedTime(""); setError(""); }}
+                                        className={`flex min-w-20 shrink-0 flex-col items-center rounded-2xl border px-3 py-3 transition ${selected ? "border-emerald-700 bg-emerald-700 text-white" : "border-clinic-border bg-card text-slate-700 hover:border-emerald-500"}`}
+                                    >
+                                        <span className={`text-xs ${selected ? "text-emerald-100" : "text-slate-500"}`}>{date.weekday}</span>
+                                        <span className="mt-0.5 text-sm font-semibold">{date.day}</span>
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    )}
                 </fieldset>
 
-                <label className="block space-y-2 text-sm font-semibold text-slate-800">
-                    {isArabic ? "رقم الهاتف للتواصل" : "Phone number"}
-                    <input required type="tel" autoComplete="tel" value={phoneValue} onChange={(event) => setPhone(event.target.value)} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-3 text-sm font-normal focus:border-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-100" />
-                </label>
-                {error ? <p role="alert" className="text-sm font-medium text-red-700">{error}</p> : null}
-                <button type="submit" disabled={!selectedDate || !selectedTime || !phoneValue.trim()} className="w-full rounded-lg bg-emerald-700 px-4 py-3 text-sm font-semibold text-white transition hover:bg-emerald-800 disabled:cursor-not-allowed disabled:bg-slate-300">{isArabic ? "تأكيد الحجز" : "Confirm appointment"}</button>
+                <fieldset className="min-w-0">
+                    <legend className="flex items-center gap-3 text-lg font-semibold text-emerald-950">
+                        <StepNumber value={3} />
+                        {isArabic ? "اختر الوقت" : "Pick a time"}
+                    </legend>
+                    <div className="mt-4 grid grid-cols-3 gap-2 sm:grid-cols-5">
+                        {slots.map((slot) => (
+                            <button
+                                key={slot.time}
+                                type="button"
+                                disabled={!slot.available}
+                                aria-pressed={selectedTime === slot.time}
+                                onClick={() => { setSelectedTime(slot.time); setError(""); }}
+                                className={`rounded-xl border px-3 py-2.5 text-sm font-semibold tabular-nums transition ${!slot.available ? "cursor-not-allowed border-transparent bg-slate-100 text-slate-400 line-through" : selectedTime === slot.time ? "border-emerald-700 bg-emerald-700 text-white" : "border-clinic-border bg-card text-emerald-900 hover:border-emerald-500"}`}
+                            >
+                                <span dir="ltr">{slot.time}</span>
+                            </button>
+                        ))}
+                    </div>
+                    {slots.length === 0 && selectedDate ? <p className="mt-4 text-sm text-slate-500">{isArabic ? "لا توجد أوقات متاحة لهذا اليوم." : "No available times for this day."}</p> : null}
+                </fieldset>
+
+                <fieldset className="min-w-0">
+                    <legend className="flex items-center gap-3 text-lg font-semibold text-emerald-950">
+                        <StepNumber value={4} />
+                        {isArabic ? "رقم التواصل" : "Your phone number"}
+                    </legend>
+                    <input
+                        required
+                        type="tel"
+                        autoComplete="tel"
+                        dir="ltr"
+                        value={phoneValue}
+                        onChange={(event) => setPhone(event.target.value)}
+                        placeholder="+961 …"
+                        aria-label={isArabic ? "رقم الهاتف" : "Phone number"}
+                        className="field mt-4 max-w-sm text-start"
+                    />
+                </fieldset>
             </div>
 
-            <aside className="h-fit rounded-xl border border-clinic-border bg-[#eff7f3] p-5">
-                <h2 className="text-base font-bold text-emerald-950">{isArabic ? "ملخص الموعد" : "Appointment summary"}</h2>
-                <dl className="mt-4 space-y-3 text-sm">
-                    <div><dt className="text-slate-500">{isArabic ? "العلاج" : "Treatment"}</dt><dd className="font-semibold text-slate-900">{isArabic ? treatment?.arName : treatment?.enName}</dd></div>
-                    <div><dt className="text-slate-500">{isArabic ? "المدة" : "Duration"}</dt><dd className="font-semibold text-slate-900">{treatment?.duration} {isArabic ? "دقيقة" : "min"}</dd></div>
-                    <div><dt className="text-slate-500">{isArabic ? "التاريخ" : "Date"}</dt><dd className="font-semibold text-slate-900">{selectedDate || "—"}</dd></div>
-                    <div><dt className="text-slate-500">{isArabic ? "الوقت" : "Time"}</dt><dd className="font-semibold text-slate-900">{selectedTime || "—"}</dd></div>
+            <aside className="surface-card h-fit p-6 lg:sticky lg:top-24">
+                <h2 className="text-2xl font-semibold text-emerald-950">{isArabic ? "ملخص الموعد" : "Your appointment"}</h2>
+                <dl className="mt-5 space-y-4 text-sm">
+                    <SummaryRow label={isArabic ? "العلاج" : "Treatment"} value={isArabic ? treatment?.arName : treatment?.enName} />
+                    <SummaryRow label={isArabic ? "المدة" : "Duration"} value={treatment ? formatDuration(treatment.duration, locale) : undefined} />
+                    <SummaryRow label={isArabic ? "التاريخ" : "Date"} value={dates.find((date) => date.value === selectedDate)?.label} />
+                    <SummaryRow label={isArabic ? "الوقت" : "Time"} value={selectedTime ? <span dir="ltr">{selectedTime}</span> : undefined} />
                 </dl>
-                <p className="mt-4 border-t border-emerald-900/10 pt-3 text-xs leading-5 text-slate-600">{isArabic ? "سيتم إرسال طلبك إلى العيادة للموافقة." : "Your appointment request will be sent to the clinic for approval."}</p>
+                <div className="mt-5 flex items-baseline justify-between border-t border-clinic-border pt-4">
+                    <span className="text-sm text-slate-500">{isArabic ? "السعر" : "Price"}</span>
+                    <span className="text-2xl font-semibold text-emerald-900">{treatment ? formatCurrency(treatment.price, locale) : "—"}</span>
+                </div>
+                {error ? <p role="alert" className="mt-4 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{error}</p> : null}
+                <button type="submit" disabled={!selectedDate || !selectedTime || !phoneValue.trim()} className="btn-primary mt-5 w-full py-3.5 text-base">
+                    {isArabic ? "تأكيد الحجز" : "Confirm booking"}
+                </button>
+                <p className="mt-3 text-center text-xs leading-5 text-slate-500">{isArabic ? "سيتم إرسال طلبك إلى العيادة عبر واتساب للموافقة." : "Your request is sent to the clinic on WhatsApp for approval."}</p>
             </aside>
         </form>
+    );
+}
+
+function StepNumber({ value }: { value: number }) {
+    return <span className="flex h-7 w-7 items-center justify-center rounded-full bg-honey-100 text-sm font-semibold text-honey-700">{value}</span>;
+}
+
+function SummaryRow({ label, value }: { label: string; value?: ReactNode }) {
+    return (
+        <div className="flex items-start justify-between gap-4">
+            <dt className="text-slate-500">{label}</dt>
+            <dd className="text-end font-medium text-slate-900">{value || "—"}</dd>
+        </div>
     );
 }

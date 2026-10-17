@@ -1,12 +1,15 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
-import { ShoppingCart } from "lucide-react";
+import { usePathname } from "next/navigation";
+import { Globe, LogOut, Menu, ShoppingBag, X } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { useAuth } from "@/components/auth/auth-provider";
 import { useClinicData } from "@/components/providers/clinic-data-provider";
 import { useLocale } from "@/components/providers/locale-provider";
+import clinicLogoImage from "../../logo.jpeg";
 
 const navItems = {
     ar: [
@@ -22,6 +25,7 @@ const navItems = {
 };
 
 export function SiteHeader() {
+    const pathname = usePathname();
     const { locale, setLocale } = useLocale();
     const { user, logout } = useAuth();
     const { cartItems, clinicLogo } = useClinicData();
@@ -29,6 +33,7 @@ export function SiteHeader() {
     const [cartAnimationKey, setCartAnimationKey] = useState(0);
     const [logoutError, setLogoutError] = useState("");
     const cartCount = cartItems.reduce((count, item) => count + item.quantity, 0);
+    const isArabic = locale === "ar";
 
     const handleLogout = async () => {
         try {
@@ -49,92 +54,96 @@ export function SiteHeader() {
 
     const isStaff = user?.role === "admin" || user?.role === "receptionist";
     const visibleNavItems = navItems[locale];
-    const primaryActionHref = user
-        ? user.role === "admin" || user.role === "receptionist"
-            ? "/dashboard"
-            : "/book"
-        : "/login";
-
-    const primaryActionLabel = user
-        ? user.role === "admin" || user.role === "receptionist"
-            ? locale === "ar"
-                ? "لوحة التحكم"
-                : "Dashboard"
-            : locale === "ar"
-                ? "حجزي"
-                : "My booking"
-        : locale === "ar"
-            ? "ابدأ الآن"
-            : "Get started";
+    const isActive = (href: string) => (href === "/" ? pathname === "/" : pathname.startsWith(href));
+    const primaryActionHref = isStaff ? "/dashboard" : "/book";
+    const primaryActionLabel = isStaff
+        ? isArabic ? "لوحة التحكم" : "Dashboard"
+        : isArabic ? "احجز موعداً" : "Book a session";
+    const toggleLocale = () => setLocale(isArabic ? "en" : "ar");
 
     return (
-        <header className="sticky top-0 z-50 border-b border-clinic-border bg-white/95 backdrop-blur-md">
-            <nav className="mx-auto flex max-w-7xl items-center justify-between px-4 py-4 sm:px-6 lg:px-8">
-                <Link href="/" className="flex items-center gap-3">
-                    <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-emerald-700 text-lg font-bold text-white">
+        <header className="sticky top-0 z-50 border-b border-clinic-border/80 bg-background/85 backdrop-blur-lg">
+            <nav className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-3 sm:px-6 lg:px-8">
+                <Link href="/" className="flex items-center gap-3" onClick={() => setIsOpen(false)}>
+                    <span className="relative h-11 w-11 shrink-0 overflow-hidden rounded-full ring-1 ring-clinic-border">
                         {clinicLogo
-                            ? <img src={clinicLogo} alt="Greens Healing Therapy" className="h-full w-full object-cover" />
-                            : "G"}
-                    </div>
-                    <div>
-                        <div className="text-base font-bold text-emerald-950">Greens Healing Therapy</div>
-                        <div className="text-[10px] uppercase tracking-[0.22em] text-emerald-700">
-                            {locale === "ar" ? "العناية الطبيعية" : "Natural wellness"}
-                        </div>
-                    </div>
+                            ? <img src={clinicLogo} alt="" className="h-full w-full object-cover" />
+                            : <Image src={clinicLogoImage} alt="" fill sizes="44px" className="scale-[1.12] object-cover" priority />}
+                    </span>
+                    <span className="leading-tight">
+                        <span className="block font-display text-lg font-semibold text-emerald-950">Greens Healing Therapy</span>
+                        <span className="block text-[11px] tracking-[0.2em] text-honey-700 uppercase">
+                            {isArabic ? "طبيعي · نقي · شافٍ" : "Natural · Pure · Healing"}
+                        </span>
+                    </span>
                 </Link>
 
-                <div className="hidden items-center gap-6 md:flex">
+                <div className="hidden items-center gap-1 md:flex">
                     {visibleNavItems.map((item) => (
                         <Link
                             key={item.href}
                             href={item.href}
-                            className="text-sm font-medium text-slate-700 transition hover:text-emerald-700"
+                            aria-current={isActive(item.href) ? "page" : undefined}
+                            className={`rounded-full px-4 py-2 text-sm font-medium transition ${isActive(item.href) ? "bg-emerald-50 text-emerald-900" : "text-slate-600 hover:text-emerald-800"}`}
                         >
                             {item.label}
                         </Link>
                     ))}
                 </div>
 
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2">
                     <button
                         type="button"
-                        onClick={() => setLocale(locale === "ar" ? "en" : "ar")}
-                        className="hidden rounded-full border border-emerald-700/20 bg-white px-3 py-2 text-xs font-semibold text-emerald-800 shadow-sm transition hover:border-emerald-700 md:inline-flex"
+                        onClick={toggleLocale}
+                        className="hidden items-center gap-1.5 rounded-full px-3 py-2 text-sm font-medium text-slate-600 transition hover:text-emerald-800 md:inline-flex"
                     >
-                        {locale === "ar" ? "English" : "العربية"}
+                        <Globe size={16} aria-hidden="true" />
+                        {isArabic ? "English" : "العربية"}
                     </button>
 
-                    {!isStaff ? <Link href="/cart" aria-label={`${locale === "ar" ? "السلة" : "Cart"}: ${cartCount}`} className="hidden items-center gap-2 rounded-full border border-emerald-700/20 bg-white px-3 py-2 text-xs font-semibold text-emerald-900 md:inline-flex">
-                        <ShoppingCart key={cartAnimationKey} size={17} aria-hidden="true" className={cartAnimationKey > 0 ? "cart-added-pop" : ""} />
-                        <span>{locale === "ar" ? "السلة" : "Cart"}</span>
-                        {cartCount > 0 ? <span key={cartCount} className="cart-count-pop rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] font-bold">{cartCount}</span> : null}
-                    </Link> : null}
+                    {!isStaff ? (
+                        <Link
+                            href="/cart"
+                            aria-label={`${isArabic ? "السلة" : "Cart"}: ${cartCount}`}
+                            className="relative inline-flex h-10 w-10 items-center justify-center rounded-full text-emerald-900 transition hover:bg-emerald-50"
+                        >
+                            <ShoppingBag key={cartAnimationKey} size={20} aria-hidden="true" className={cartAnimationKey > 0 ? "cart-added-pop" : ""} />
+                            {cartCount > 0 ? (
+                                <span key={cartCount} className="cart-count-pop absolute -end-0.5 -top-0.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-honey-500 px-1 text-[10px] font-bold text-white">
+                                    {cartCount}
+                                </span>
+                            ) : null}
+                        </Link>
+                    ) : null}
 
                     {user ? (
                         <button
                             type="button"
                             onClick={() => void handleLogout()}
-                            className="hidden rounded-full border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 md:inline-flex"
+                            aria-label={isArabic ? "تسجيل الخروج" : "Log out"}
+                            title={isArabic ? "تسجيل الخروج" : "Log out"}
+                            className="hidden h-10 w-10 items-center justify-center rounded-full text-slate-600 transition hover:bg-emerald-50 hover:text-emerald-800 md:inline-flex"
                         >
-                            {locale === "ar" ? "تسجيل الخروج" : "Logout"}
+                            <LogOut size={18} aria-hidden="true" />
                         </button>
-                    ) : null}
+                    ) : (
+                        <Link href="/login" className="hidden rounded-full px-3 py-2 text-sm font-medium text-slate-600 transition hover:text-emerald-800 md:inline-flex">
+                            {isArabic ? "تسجيل الدخول" : "Sign in"}
+                        </Link>
+                    )}
 
-                    <Link
-                        href={primaryActionHref}
-                        className="hidden rounded-lg bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-800 md:inline-flex"
-                    >
+                    <Link href={primaryActionHref} className="btn-primary hidden py-2.5 md:inline-flex">
                         {primaryActionLabel}
                     </Link>
 
                     <button
                         type="button"
-                        aria-label="Toggle menu"
+                        aria-label={isArabic ? "القائمة" : "Menu"}
+                        aria-expanded={isOpen}
                         onClick={() => setIsOpen((current) => !current)}
-                        className="inline-flex items-center justify-center rounded-full border border-slate-200 bg-white p-2 text-slate-700 md:hidden"
+                        className="inline-flex h-10 w-10 items-center justify-center rounded-full text-emerald-900 transition hover:bg-emerald-50 md:hidden"
                     >
-                        ☰
+                        {isOpen ? <X size={22} aria-hidden="true" /> : <Menu size={22} aria-hidden="true" />}
                     </button>
                 </div>
             </nav>
@@ -142,23 +151,19 @@ export function SiteHeader() {
             {logoutError ? <p role="alert" className="border-t border-red-200 bg-red-50 px-4 py-2 text-center text-sm text-red-800">{logoutError}</p> : null}
 
             {isOpen ? (
-                <div className="border-t border-emerald-900/10 bg-white px-4 py-4 md:hidden">
-                    <div className="flex flex-col gap-2">
+                <div className="border-t border-clinic-border bg-background px-4 pb-6 pt-3 md:hidden">
+                    <div className="flex flex-col gap-1">
                         {visibleNavItems.map((item) => (
                             <Link
                                 key={item.href}
                                 href={item.href}
                                 onClick={() => setIsOpen(false)}
-                                className="rounded-xl px-3 py-2 text-sm font-medium text-slate-700 hover:bg-emerald-50 hover:text-emerald-700"
+                                aria-current={isActive(item.href) ? "page" : undefined}
+                                className={`rounded-2xl px-4 py-3 text-base font-medium ${isActive(item.href) ? "bg-emerald-50 text-emerald-900" : "text-slate-700"}`}
                             >
                                 {item.label}
                             </Link>
                         ))}
-                        {!isStaff ? <Link href="/cart" onClick={() => setIsOpen(false)} className="flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium text-slate-700 hover:bg-emerald-50 hover:text-emerald-700">
-                            <ShoppingCart size={17} aria-hidden="true" />
-                            <span>{locale === "ar" ? "السلة" : "Cart"}</span>
-                            {cartCount > 0 ? <span className="rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] font-bold">{cartCount}</span> : null}
-                        </Link> : null}
                         {user ? (
                             <button
                                 type="button"
@@ -166,25 +171,23 @@ export function SiteHeader() {
                                     void handleLogout();
                                     setIsOpen(false);
                                 }}
-                                className="mt-2 rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700"
+                                className="flex items-center gap-2 rounded-2xl px-4 py-3 text-start text-base font-medium text-slate-700"
                             >
-                                {locale === "ar" ? "تسجيل الخروج" : "Logout"}
+                                <LogOut size={18} aria-hidden="true" />
+                                {isArabic ? "تسجيل الخروج" : "Log out"}
                             </button>
-                        ) : null}
-                        <Link
-                            href={primaryActionHref}
-                            onClick={() => setIsOpen(false)}
-                            className="mt-2 rounded-lg bg-emerald-700 px-3 py-2.5 text-center text-sm font-semibold text-white"
-                        >
+                        ) : (
+                            <Link href="/login" onClick={() => setIsOpen(false)} className="rounded-2xl px-4 py-3 text-base font-medium text-slate-700">
+                                {isArabic ? "تسجيل الدخول" : "Sign in"}
+                            </Link>
+                        )}
+                        <button type="button" onClick={toggleLocale} className="flex items-center gap-2 rounded-2xl px-4 py-3 text-start text-base font-medium text-slate-700">
+                            <Globe size={18} aria-hidden="true" />
+                            {isArabic ? "English" : "العربية"}
+                        </button>
+                        <Link href={primaryActionHref} onClick={() => setIsOpen(false)} className="btn-primary mt-3 w-full py-3.5">
                             {primaryActionLabel}
                         </Link>
-                        <button
-                            type="button"
-                            onClick={() => setLocale(locale === "ar" ? "en" : "ar")}
-                            className="mt-2 rounded-xl border border-emerald-700/20 bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-800"
-                        >
-                            {locale === "ar" ? "English" : "العربية"}
-                        </button>
                     </div>
                 </div>
             ) : null}

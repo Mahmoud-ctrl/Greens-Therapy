@@ -17,7 +17,7 @@ import type { AppUser } from "@/lib/auth";
 interface AuthContextValue {
     user: AppUser | null;
     login: (email: string, password: string) => Promise<AppUser>;
-    register: (name: string, email: string, password: string) => Promise<boolean>;
+    register: (name: string, email: string, password: string) => Promise<AppUser>;
     updateProfile: (profile: Pick<AppUser, "name" | "email" | "phone">) => Promise<void>;
     logout: () => Promise<void>;
     isLoaded: boolean;
@@ -80,14 +80,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 return signedInUser;
             },
             register: async (name, email, password) => {
-                const { data, error } = await createClient().auth.signUp({
+                const supabase = createClient();
+                const { data, error } = await supabase.auth.signUp({
                     email,
                     password,
                     options: { data: { full_name: name } },
                 });
                 if (error) throw error;
-                if (data.session && data.user) setUser(toAppUser(data.user));
-                return !data.session;
+
+                // Registration signs the user in directly. Supabase only returns a session here when
+                // "Confirm email" is disabled in the project's Auth settings; otherwise sign in fails below.
+                let authUser = data.session ? data.user : null;
+                if (!authUser) {
+                    const signIn = await supabase.auth.signInWithPassword({ email, password });
+                    if (signIn.error) throw signIn.error;
+                    authUser = signIn.data.user;
+                }
+                if (!authUser) throw new Error("Supabase did not return a user after registration.");
+                const registeredUser = toAppUser(authUser);
+                setUser(registeredUser);
+                return registeredUser;
             },
             updateProfile: async (profile) => {
                 const { data, error } = await createClient().auth.updateUser({

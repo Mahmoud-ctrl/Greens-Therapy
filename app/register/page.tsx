@@ -1,23 +1,28 @@
 "use client";
 
 import Link from "next/link";
+import { Eye, EyeOff } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 
 import { useAuth } from "@/components/auth/auth-provider";
 import { useLocale } from "@/components/providers/locale-provider";
+import { getAuthErrorMessage } from "@/lib/supabase/auth-errors";
 
 export default function RegisterPage() {
     const { locale } = useLocale();
     const router = useRouter();
-    const { login } = useAuth();
+    const { register } = useAuth();
     const [firstName, setFirstName] = useState("");
     const [lastName, setLastName] = useState("");
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
+    const [showPassword, setShowPassword] = useState(false);
     const [error, setError] = useState("");
+    const [notice, setNotice] = useState("");
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
-    const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+    const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
         event.preventDefault();
 
         if (!firstName.trim() || !lastName.trim() || !email.trim() || !password.trim()) {
@@ -25,16 +30,23 @@ export default function RegisterPage() {
             return;
         }
 
-        const newUser = {
-            id: `patient-${Date.now()}`,
-            name: `${firstName.trim()} ${lastName.trim()}`,
-            email: email.trim(),
-            password,
-            role: "patient" as const,
-        };
-
-        login(newUser);
-        router.push("/");
+        setError("");
+        setNotice("");
+        setIsSubmitting(true);
+        try {
+            const needsConfirmation = await register(`${firstName.trim()} ${lastName.trim()}`, email.trim(), password);
+            if (needsConfirmation) {
+                setNotice(locale === "ar"
+                    ? "تحقق من بريدك الإلكتروني لتأكيد الحساب قبل تسجيل الدخول."
+                    : "Check your email to confirm your account before signing in.");
+                return;
+            }
+            router.push("/");
+        } catch (cause) {
+            setError(getAuthErrorMessage(cause, locale, "register"));
+        } finally {
+            setIsSubmitting(false);
+        }
     };
 
     return (
@@ -47,10 +59,6 @@ export default function RegisterPage() {
                     {locale === "ar" ? "ابدأ رحلتك مع رعاية طبيعية متكاملة." : "Start your wellness journey with us."}
                 </p>
 
-                <div className="mt-4 rounded-lg border border-clinic-border bg-[#eff7f3] p-3 text-sm text-slate-700">
-                    {locale === "ar" ? "يُحفظ الحساب في هذا المتصفح فقط حتى يتم ربط المصادقة." : "This account is stored in this browser until authentication is connected."}
-                </div>
-
                 <form onSubmit={handleSubmit} className="mt-8 space-y-4">
                     <div className="grid gap-4 sm:grid-cols-2">
                         <label className="flex flex-col gap-2 text-sm font-medium text-slate-700">
@@ -60,6 +68,7 @@ export default function RegisterPage() {
                                 onChange={(event) => setFirstName(event.target.value)}
                                 className="rounded-lg border border-slate-300 bg-white px-3 py-3 focus:border-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-100"
                                 placeholder={locale === "ar" ? "الاسم" : "Name"}
+                                required
                             />
                         </label>
                         <label className="flex flex-col gap-2 text-sm font-medium text-slate-700">
@@ -69,6 +78,7 @@ export default function RegisterPage() {
                                 onChange={(event) => setLastName(event.target.value)}
                                 className="rounded-lg border border-slate-300 bg-white px-3 py-3 focus:border-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-100"
                                 placeholder={locale === "ar" ? "العائلة" : "Surname"}
+                                required
                             />
                         </label>
                     </div>
@@ -80,23 +90,39 @@ export default function RegisterPage() {
                             onChange={(event) => setEmail(event.target.value)}
                             className="rounded-lg border border-slate-300 bg-white px-3 py-3 focus:border-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-100"
                             placeholder="name@example.com"
+                            required
                         />
                     </label>
                     <label className="flex flex-col gap-2 text-sm font-medium text-slate-700">
                         {locale === "ar" ? "كلمة المرور" : "Password"}
-                        <input
-                            type="password"
-                            value={password}
-                            onChange={(event) => setPassword(event.target.value)}
-                            className="rounded-lg border border-slate-300 bg-white px-3 py-3 focus:border-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-100"
-                            placeholder="••••••••"
-                        />
+                        <div className="relative">
+                            <input
+                                type={showPassword ? "text" : "password"}
+                                value={password}
+                                onChange={(event) => setPassword(event.target.value)}
+                                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-3 pe-10 focus:border-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+                                placeholder="••••••••"
+                                minLength={8}
+                                required
+                            />
+                            <button
+                                type="button"
+                                onClick={() => setShowPassword((visible) => !visible)}
+                                aria-label={showPassword
+                                    ? (locale === "ar" ? "إخفاء كلمة المرور" : "Hide password")
+                                    : (locale === "ar" ? "إظهار كلمة المرور" : "Show password")}
+                                className="absolute end-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-emerald-700"
+                            >
+                                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                            </button>
+                        </div>
                     </label>
 
                     {error ? <div className="text-sm text-red-600">{error}</div> : null}
+                    {notice ? <div role="status" className="text-sm text-emerald-800">{notice}</div> : null}
 
-                    <button type="submit" className="w-full rounded-lg bg-emerald-700 px-4 py-3 text-sm font-semibold text-white transition hover:bg-emerald-800">
-                        {locale === "ar" ? "إنشاء الحساب" : "Create account"}
+                    <button type="submit" disabled={isSubmitting} className="w-full rounded-lg bg-emerald-700 px-4 py-3 text-sm font-semibold text-white transition hover:bg-emerald-800 disabled:opacity-60">
+                        {isSubmitting ? (locale === "ar" ? "جارٍ إنشاء الحساب..." : "Creating account...") : (locale === "ar" ? "إنشاء الحساب" : "Create account")}
                     </button>
                 </form>
 

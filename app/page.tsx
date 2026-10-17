@@ -1,15 +1,18 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { useEffect, useState } from "react";
 
 import { useAuth } from "@/components/auth/auth-provider";
 import { useClinicData } from "@/components/providers/clinic-data-provider";
 import { useLocale } from "@/components/providers/locale-provider";
 import { SectionShell } from "@/components/ui/section-shell";
+import therapistPoster from "../about us.jpeg";
 
 export default function HomePage() {
   const [bookingConfirmed, setBookingConfirmed] = useState(false);
+  const [bookingWhatsAppUrl, setBookingWhatsAppUrl] = useState("");
   const { locale } = useLocale();
   const { user } = useAuth();
   const { products, treatments } = useClinicData();
@@ -19,7 +22,13 @@ export default function HomePage() {
   useEffect(() => {
     if (window.sessionStorage.getItem("greens-healing-booking-confirmed") === "1") {
       window.sessionStorage.removeItem("greens-healing-booking-confirmed");
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- Consume one-shot navigation state after hydration.
       setBookingConfirmed(true);
+    }
+    const whatsappUrl = window.sessionStorage.getItem("greens-healing-booking-whatsapp-url");
+    if (whatsappUrl) {
+      window.sessionStorage.removeItem("greens-healing-booking-whatsapp-url");
+      setBookingWhatsAppUrl(whatsappUrl);
     }
   }, []);
 
@@ -27,6 +36,7 @@ export default function HomePage() {
     if (user?.role === "admin" || user?.role === "receptionist") {
       const confirmation = window.sessionStorage.getItem("greens-healing-booking-confirmed");
       if (confirmation === "1") window.sessionStorage.removeItem("greens-healing-booking-confirmed");
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- Hide patient-only confirmation from staff.
       setBookingConfirmed(false);
     }
   }, [user?.role]);
@@ -54,7 +64,7 @@ export default function HomePage() {
 
   return (
     <div className="bg-white">
-      {bookingConfirmed ? <div role="status" className="mx-auto mt-4 max-w-7xl px-4 sm:px-6 lg:px-8"><p className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-900">{locale === "ar" ? "تم إرسال طلب الموعد إلى العيادة للموافقة." : "Your appointment request has been sent to the clinic for approval."}</p></div> : null}
+      {bookingConfirmed ? <div role="status" className="mx-auto mt-4 max-w-7xl px-4 sm:px-6 lg:px-8"><div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-900"><p>{locale === "ar" ? "تم حفظ طلب الموعد. أرسله عبر واتساب إلى العيادة للموافقة." : "Your appointment request is saved. Send it to the clinic on WhatsApp for approval."}</p>{bookingWhatsAppUrl ? <a href={bookingWhatsAppUrl} target="_blank" rel="noreferrer" className="mt-2 inline-block font-semibold underline">{locale === "ar" ? "فتح واتساب لإرسال الطلب" : "Open WhatsApp to send the request"}</a> : null}</div></div> : null}
       <section className="border-b border-clinic-border bg-[#eef7f3]">
         <div className="mx-auto max-w-7xl px-4 py-14 sm:px-6 sm:py-16 lg:px-8">
           <div className="grid items-center gap-10">
@@ -132,6 +142,45 @@ export default function HomePage() {
           ))}
         </div>}
       </SectionShell>
+
+      <section className="border-t border-clinic-border bg-[#f5f5ed] px-4 py-14 sm:px-6 lg:px-8">
+        <div className="mx-auto grid max-w-5xl items-center gap-7 sm:grid-cols-[200px_1fr] sm:gap-10">
+          <div className="relative mx-auto aspect-[4/5] w-full max-w-[200px] overflow-hidden rounded-md border-4 border-white shadow-sm">
+            <Image
+              src={therapistPoster}
+              alt={locale === "ar" ? "صورة علي أخضر" : "Portrait of Ali Akhdar"}
+              sizes="200px"
+              className="absolute right-0 top-0 h-auto w-[200%] max-w-none"
+            />
+          </div>
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-700">
+              {locale === "ar" ? "المعالج التقليدي" : "Traditional healer"}
+            </p>
+            <h2 className="mt-2 text-3xl font-bold text-emerald-950">ALI AKHDAR</h2>
+            <ul className="mt-3 flex flex-wrap gap-x-3 gap-y-1 text-sm font-medium text-emerald-800">
+              {(locale === "ar"
+                ? ["العلاج بالحجامة", "العلاج بالتدليك", "العلاج بالإبر الجافة", "الشفاء الشامل"]
+                : ["Cupping therapy", "Massage therapy", "Dry needling therapy", "Holistic healing"]
+              ).map((service) => <li key={service}>{service}</li>)}
+            </ul>
+            <div className="mt-5 space-y-3 text-sm leading-6 text-slate-700 sm:text-base sm:leading-7">
+              <p>{locale === "ar"
+                ? "علي أخضر ممارس للعلاج التقليدي شغوف بالعافية الطبيعية والعلاجات التقليدية. وهو أيضاً مسعف ومدرب غوص تقني ومربٍ للنحل ومزارع، ويكنّ حباً عميقاً للطبيعة والبيئة."
+                : "Ali Akhdar is a traditional healing practitioner passionate about natural wellness and traditional therapies. He is also a medic, technical diving instructor, beekeeper, and agriculturalist with a deep love for nature and the environment."}</p>
+              <p>{locale === "ar"
+                ? "إلى جانب العلاج، ينتج العسل الطبيعي ويقدم منتجات مختارة من خيرات خلايا النحل، تعبيراً عن تقديره للطبيعة وما تمنحه."
+                : "Beyond healing, he produces natural honey and offers selected hive products, reflecting his appreciation for nature and its many gifts."}</p>
+              <p>{locale === "ar"
+                ? "مهمته تعزيز ممارسات العلاج التقليدي والمنتجات الطبيعية ونهج متوازن للعافية يستلهمه من الطبيعة."
+                : "His mission is to promote traditional healing practices, natural products, and a balanced approach to well-being inspired by nature."}</p>
+            </div>
+            <p className="mt-4 font-semibold text-emerald-900">
+              {locale === "ar" ? "علي أخضر: العلاج التقليدي والحياة الطبيعية." : "ALI AKHDAR – Traditional Healing & Natural Living."}
+            </p>
+          </div>
+        </div>
+      </section>
     </div >
   );
 }

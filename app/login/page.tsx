@@ -1,12 +1,13 @@
 "use client";
 
 import Link from "next/link";
+import { Eye, EyeOff } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 
 import { useAuth } from "@/components/auth/auth-provider";
 import { useLocale } from "@/components/providers/locale-provider";
-import { signInDemoUser } from "@/lib/auth";
+import { getAuthErrorMessage } from "@/lib/supabase/auth-errors";
 
 export default function LoginPage() {
     const { locale } = useLocale();
@@ -14,19 +15,23 @@ export default function LoginPage() {
     const { login } = useAuth();
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
+    const [showPassword, setShowPassword] = useState(false);
     const [error, setError] = useState("");
 
-    const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+    const [isSubmitting, setIsSubmitting] = useState(false);
+
+    const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
         event.preventDefault();
-
-        const user = signInDemoUser(email, password);
-        if (!user) {
-            setError(locale === "ar" ? "بيانات الدخول غير صحيحة." : "Invalid email or password.");
-            return;
+        setError("");
+        setIsSubmitting(true);
+        try {
+            const user = await login(email.trim(), password);
+            router.push(user.role === "admin" || user.role === "receptionist" ? "/dashboard" : "/book");
+        } catch (cause) {
+            setError(getAuthErrorMessage(cause, locale, "login"));
+        } finally {
+            setIsSubmitting(false);
         }
-
-        login(user);
-        router.push(user.role === "admin" || user.role === "receptionist" ? "/dashboard" : "/book");
     };
 
     return (
@@ -48,23 +53,37 @@ export default function LoginPage() {
                             onChange={(event) => setEmail(event.target.value)}
                             className="rounded-lg border border-slate-300 bg-white px-3 py-3 focus:border-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-100"
                             placeholder="name@example.com"
+                            required
                         />
                     </label>
                     <label className="flex flex-col gap-2 text-sm font-medium text-slate-700">
                         {locale === "ar" ? "كلمة المرور" : "Password"}
-                        <input
-                            type="password"
-                            value={password}
-                            onChange={(event) => setPassword(event.target.value)}
-                            className="rounded-lg border border-slate-300 bg-white px-3 py-3 focus:border-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-100"
-                            placeholder="••••••••"
-                        />
+                        <div className="relative">
+                            <input
+                                type={showPassword ? "text" : "password"}
+                                value={password}
+                                onChange={(event) => setPassword(event.target.value)}
+                                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-3 pe-10 focus:border-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+                                placeholder="••••••••"
+                                required
+                            />
+                            <button
+                                type="button"
+                                onClick={() => setShowPassword((visible) => !visible)}
+                                aria-label={showPassword
+                                    ? (locale === "ar" ? "إخفاء كلمة المرور" : "Hide password")
+                                    : (locale === "ar" ? "إظهار كلمة المرور" : "Show password")}
+                                className="absolute end-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-emerald-700"
+                            >
+                                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                            </button>
+                        </div>
                     </label>
 
                     {error ? <div className="text-sm text-red-600">{error}</div> : null}
 
-                    <button type="submit" className="w-full rounded-lg bg-emerald-700 px-4 py-3 text-sm font-semibold text-white transition hover:bg-emerald-800">
-                        {locale === "ar" ? "تسجيل الدخول" : "Login"}
+                    <button type="submit" disabled={isSubmitting} className="w-full rounded-lg bg-emerald-700 px-4 py-3 text-sm font-semibold text-white transition hover:bg-emerald-800 disabled:opacity-60">
+                        {isSubmitting ? (locale === "ar" ? "جارٍ تسجيل الدخول..." : "Signing in...") : (locale === "ar" ? "تسجيل الدخول" : "Login")}
                     </button>
                 </form>
 

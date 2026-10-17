@@ -1,0 +1,1 @@
+export const clinicWhatsAppNumber = "96171020821";

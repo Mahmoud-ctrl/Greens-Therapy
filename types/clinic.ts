@@ -10,6 +10,7 @@ export interface Treatment {
     duration: number;
     category: string;
     image?: string;
+    active?: boolean;
 }
 
 export interface Product {
@@ -17,6 +18,8 @@ export interface Product {
     arName: string;
     enName: string;
     description: string;
+    arDescription?: string;
+    enDescription?: string;
     category: string;
     price: number;
     weight: string;

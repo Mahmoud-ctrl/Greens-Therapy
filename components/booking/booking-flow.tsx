@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/auth/auth-provider";
 import { useClinicData } from "@/components/providers/clinic-data-provider";
 import { useLocale } from "@/components/providers/locale-provider";
+import { clinicWhatsAppNumber } from "@/lib/clinic-contact";
 
 function dateKey(date: Date) {
     return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
@@ -23,19 +24,17 @@ function minutesToTime(minutes: number) {
 export function BookingFlow() {
     const router = useRouter();
     const { locale } = useLocale();
-    const { user } = useAuth();
-    const { treatments, clinicHours, isAppointmentSlotAvailable, bookAppointment } = useClinicData();
+    const { user, updateProfile } = useAuth();
+    const { treatments, clinicHours, isAppointmentSlotAvailable, getBookedAppointmentSlots, bookAppointment } = useClinicData();
     const isArabic = locale === "ar";
     const [treatmentId, setTreatmentId] = useState("");
-    const [selectedDate, setSelectedDate] = useState("");
+    const [requestedDate, setRequestedDate] = useState("");
     const [selectedTime, setSelectedTime] = useState("");
-    const [phone, setPhone] = useState(user?.phone ?? "");
+    const [phone, setPhone] = useState<string | null>(null);
     const [error, setError] = useState("");
+    const [bookedSlots, setBookedSlots] = useState<{ date: string; slots: Array<{ startTime: string; endTime: string }> } | null>(null);
+    const phoneValue = phone ?? user?.phone ?? "";
     const treatment = treatments.find((item) => item.id === treatmentId) ?? treatments[0];
-
-    useEffect(() => {
-        if (user?.phone) setPhone(user.phone);
-    }, [user?.phone]);
 
     const dates = useMemo(() => {
         if (!clinicHours || clinicHours.slotInterval < 1) return [];
@@ -69,19 +68,26 @@ export function BookingFlow() {
         return availableDates;
     }, [clinicHours, isAppointmentSlotAvailable, isArabic, treatment]);
 
+    const selectedDate = dates.some((date) => date.value === requestedDate)
+        ? requestedDate
+        : dates[0]?.value ?? "";
+
     useEffect(() => {
-        if (dates.length && !dates.some((date) => date.value === selectedDate)) {
-            setSelectedDate(dates[0].value);
-            setSelectedTime("");
-        }
-        if (!dates.length) {
-            setSelectedDate("");
-            setSelectedTime("");
-        }
-    }, [dates, selectedDate]);
+        if (!selectedDate) return;
+        let mounted = true;
+        void getBookedAppointmentSlots(selectedDate).then((slotsForDate) => {
+            if (mounted) setBookedSlots({ date: selectedDate, slots: slotsForDate });
+        }).catch((cause: unknown) => {
+            if (mounted) setError(cause instanceof Error ? cause.message : "Unable to load appointment availability.");
+        });
+        return () => {
+            mounted = false;
+        };
+    }, [getBookedAppointmentSlots, selectedDate]);
 
     const slots = useMemo(() => {
         if (!clinicHours || clinicHours.slotInterval < 1 || !treatment || !selectedDate) return [];
+        const bookedSlotsForDate = bookedSlots?.date === selectedDate ? bookedSlots.slots : [];
         const slotsForDate: Array<{ time: string; available: boolean }> = [];
         const opening = timeToMinutes(clinicHours.startTime);
         const closing = timeToMinutes(clinicHours.endTime);
@@ -91,36 +97,55 @@ export function BookingFlow() {
             const time = minutesToTime(minute);
             slotsForDate.push({
                 time,
-                available: isAppointmentSlotAvailable(selectedDate, time, minutesToTime(minute + treatment.duration)),
+                available: isAppointmentSlotAvailable(selectedDate, time, minutesToTime(minute + treatment.duration))
+                    && !bookedSlotsForDate.some((booked) => minute < timeToMinutes(booked.endTime)
+                        && minute + treatment.duration > timeToMinutes(booked.startTime)),
             });
         }
         return slotsForDate;
-    }, [clinicHours, isAppointmentSlotAvailable, selectedDate, treatment]);
+    }, [bookedSlots, clinicHours, isAppointmentSlotAvailable, selectedDate, treatment]);
 
-    const confirmBooking = (event: FormEvent<HTMLFormElement>) => {
+    const confirmBooking = async (event: FormEvent<HTMLFormElement>) => {
         event.preventDefault();
-        if (!user || !treatment || !selectedDate || !selectedTime || !phone.trim()) {
+        if (!user || !treatment || !selectedDate || !selectedTime || !phoneValue.trim()) {
             setError(isArabic ? "أكمل بيانات الحجز واختر موعداً متاحاً." : "Complete your details and select an available time.");
             return;
         }
         const endTime = minutesToTime(timeToMinutes(selectedTime) + treatment.duration);
-        const booked = bookAppointment({
-            patientName: user.name,
-            patientEmail: user.email,
-            patientPhone: phone.trim(),
-            treatmentId: treatment.id,
-            treatmentName: isArabic ? treatment.arName : treatment.enName,
-            date: selectedDate,
-            startTime: selectedTime,
-            endTime,
-            status: "Pending",
-        });
-        if (!booked) {
-            setError(isArabic ? "هذا الموعد لم يعد متاحاً. اختر وقتاً آخر." : "That time was just booked. Please choose another slot.");
+        try {
+            if (phoneValue.trim() !== (user.phone ?? "")) {
+                await updateProfile({ name: user.name, email: user.email, phone: phoneValue.trim() });
+            }
+            const booked = await bookAppointment({
+                treatmentId: treatment.id,
+                date: selectedDate,
+                startTime: selectedTime,
+                endTime,
+            });
+            if (!booked) {
+                setError(isArabic ? "هذا الموعد لم يعد متاحاً. اختر وقتاً آخر." : "That time was just booked. Please choose another slot.");
+                setSelectedTime("");
+                return;
+            }
+        } catch (cause) {
+            setError(cause instanceof Error ? cause.message : (isArabic ? "تعذر حجز الموعد." : "Unable to book the appointment."));
             setSelectedTime("");
             return;
         }
+        const whatsappMessage = [
+            isArabic ? "طلب موعد جديد إلى Greens Healing Therapy" : "New appointment request for Greens Healing Therapy",
+            `${isArabic ? "الاسم" : "Name"}: ${user.name}`,
+            `${isArabic ? "البريد الإلكتروني" : "Email"}: ${user.email}`,
+            `${isArabic ? "الهاتف" : "Phone"}: ${phoneValue.trim()}`,
+            `${isArabic ? "العلاج" : "Treatment"}: ${isArabic ? treatment.arName : treatment.enName}`,
+            `${isArabic ? "التاريخ" : "Date"}: ${selectedDate}`,
+            `${isArabic ? "الوقت" : "Time"}: ${selectedTime} - ${endTime}`,
+            isArabic ? "الحالة: بانتظار موافقة العيادة" : "Status: Pending clinic approval",
+        ].join("\n");
+        const whatsappUrl = `https://wa.me/${clinicWhatsAppNumber}?text=${encodeURIComponent(whatsappMessage)}`;
         window.sessionStorage.setItem("greens-healing-booking-confirmed", "1");
+        window.sessionStorage.setItem("greens-healing-booking-whatsapp-url", whatsappUrl);
+        window.open(whatsappUrl, "_blank", "noopener,noreferrer");
         router.push("/");
     };
 
@@ -145,7 +170,7 @@ export function BookingFlow() {
                 <fieldset>
                     <legend className="mb-2 text-sm font-semibold text-slate-800">{isArabic ? "اختر يوماً متاحاً" : "Choose an available day"}</legend>
                     <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                        {dates.map((date) => <button key={date.value} type="button" onClick={() => { setSelectedDate(date.value); setSelectedTime(""); setError(""); }} className={`rounded-lg border px-3 py-3 text-sm font-medium transition ${selectedDate === date.value ? "border-emerald-700 bg-emerald-50 text-emerald-950" : "border-clinic-border bg-white text-slate-700 hover:border-emerald-500"}`}>{date.label}</button>)}
+                        {dates.map((date) => <button key={date.value} type="button" onClick={() => { setRequestedDate(date.value); setSelectedTime(""); setError(""); }} className={`rounded-lg border px-3 py-3 text-sm font-medium transition ${selectedDate === date.value ? "border-emerald-700 bg-emerald-50 text-emerald-950" : "border-clinic-border bg-white text-slate-700 hover:border-emerald-500"}`}>{date.label}</button>)}
                     </div>
                     {dates.length === 0 ? <p className="rounded-lg bg-[#eff7f3] p-3 text-sm text-slate-600">{isArabic ? "لا توجد أيام متاحة خلال الثلاثين يوماً القادمة." : "No available days in the next 30 days."}</p> : null}
                 </fieldset>
@@ -160,10 +185,10 @@ export function BookingFlow() {
 
                 <label className="block space-y-2 text-sm font-semibold text-slate-800">
                     {isArabic ? "رقم الهاتف للتواصل" : "Phone number"}
-                    <input required type="tel" autoComplete="tel" value={phone} onChange={(event) => setPhone(event.target.value)} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-3 text-sm font-normal focus:border-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-100" />
+                    <input required type="tel" autoComplete="tel" value={phoneValue} onChange={(event) => setPhone(event.target.value)} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-3 text-sm font-normal focus:border-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-100" />
                 </label>
                 {error ? <p role="alert" className="text-sm font-medium text-red-700">{error}</p> : null}
-                <button type="submit" disabled={!selectedDate || !selectedTime || !phone.trim()} className="w-full rounded-lg bg-emerald-700 px-4 py-3 text-sm font-semibold text-white transition hover:bg-emerald-800 disabled:cursor-not-allowed disabled:bg-slate-300">{isArabic ? "تأكيد الحجز" : "Confirm appointment"}</button>
+                <button type="submit" disabled={!selectedDate || !selectedTime || !phoneValue.trim()} className="w-full rounded-lg bg-emerald-700 px-4 py-3 text-sm font-semibold text-white transition hover:bg-emerald-800 disabled:cursor-not-allowed disabled:bg-slate-300">{isArabic ? "تأكيد الحجز" : "Confirm appointment"}</button>
             </div>
 
             <aside className="h-fit rounded-xl border border-clinic-border bg-[#eff7f3] p-5">

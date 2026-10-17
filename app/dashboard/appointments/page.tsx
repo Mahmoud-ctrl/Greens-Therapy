@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 
 import { useAuth } from "@/components/auth/auth-provider";
 import { useClinicData } from "@/components/providers/clinic-data-provider";
@@ -10,12 +10,24 @@ export default function DashboardAppointmentsPage() {
     const { appointments, markAppointmentsRead, updateAppointmentStatus } = useClinicData();
     const { user } = useAuth();
     const { locale } = useLocale();
+    const [actionError, setActionError] = useState("");
     const isArabic = locale === "ar";
     const isAdmin = user?.role === "admin";
 
     useEffect(() => {
-        markAppointmentsRead();
-    }, [markAppointmentsRead]);
+        void markAppointmentsRead().catch((cause: unknown) => {
+            setActionError(cause instanceof Error ? cause.message : (isArabic ? "تعذر تحديث حالة قراءة المواعيد." : "Unable to mark appointments as read."));
+        });
+    }, [isArabic, markAppointmentsRead]);
+
+    const handleStatusUpdate = async (appointmentId: string, status: "Confirmed" | "Cancelled") => {
+        try {
+            await updateAppointmentStatus(appointmentId, status);
+            setActionError("");
+        } catch (cause) {
+            setActionError(cause instanceof Error ? cause.message : (isArabic ? "تعذر تحديث الموعد." : "Unable to update the appointment."));
+        }
+    };
 
     const rows = appointments.map((appointment) => ({
         key: appointment.id,
@@ -30,6 +42,7 @@ export default function DashboardAppointmentsPage() {
 
     return (
         <div className="space-y-6">
+            {actionError ? <p role="alert" className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{actionError}</p> : null}
             <div className="flex items-center justify-between">
                 <div>
                     <div className="text-sm uppercase tracking-[0.2em] text-emerald-700">{isArabic ? "المواعيد" : "Appointments"}</div>
@@ -66,7 +79,7 @@ export default function DashboardAppointmentsPage() {
                                             : appointment.status}
                                     </span>
                                 </td>
-                                {isAdmin ? <td className="px-4 py-3">{appointment.status === "Pending" ? <div className="flex gap-2"><button type="button" onClick={() => updateAppointmentStatus(appointment.appointmentId, "Confirmed")} className="rounded-md bg-emerald-700 px-2.5 py-1.5 text-xs font-semibold text-white">{isArabic ? "تأكيد" : "Confirm"}</button><button type="button" onClick={() => updateAppointmentStatus(appointment.appointmentId, "Cancelled")} className="rounded-md border border-red-300 px-2.5 py-1.5 text-xs font-semibold text-red-700">{isArabic ? "رفض" : "Reject"}</button></div> : <span className="text-slate-400">—</span>}</td> : null}
+                                {isAdmin ? <td className="px-4 py-3">{appointment.status === "Pending" ? <div className="flex gap-2"><button type="button" onClick={() => void handleStatusUpdate(appointment.appointmentId, "Confirmed")} className="rounded-md bg-emerald-700 px-2.5 py-1.5 text-xs font-semibold text-white">{isArabic ? "تأكيد" : "Confirm"}</button><button type="button" onClick={() => void handleStatusUpdate(appointment.appointmentId, "Cancelled")} className="rounded-md border border-red-300 px-2.5 py-1.5 text-xs font-semibold text-red-700">{isArabic ? "رفض" : "Reject"}</button></div> : <span className="text-slate-400">—</span>}</td> : null}
                             </tr>
                         ))}
                     </tbody>

@@ -27,7 +27,19 @@ export function SiteHeader() {
     const { cartItems, clinicLogo } = useClinicData();
     const [isOpen, setIsOpen] = useState(false);
     const [cartAnimationKey, setCartAnimationKey] = useState(0);
+    const [logoutError, setLogoutError] = useState("");
     const cartCount = cartItems.reduce((count, item) => count + item.quantity, 0);
+
+    const handleLogout = async () => {
+        try {
+            await logout();
+            setLogoutError("");
+        } catch (cause) {
+            const message = cause instanceof Error ? cause.message : "Unable to sign out.";
+            console.error("Unable to sign out:", message);
+            setLogoutError(message);
+        }
+    };
 
     useEffect(() => {
         const animateCart = () => setCartAnimationKey((key) => key + 1);
@@ -102,7 +114,7 @@ export function SiteHeader() {
                     {user ? (
                         <button
                             type="button"
-                            onClick={logout}
+                            onClick={() => void handleLogout()}
                             className="hidden rounded-full border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 md:inline-flex"
                         >
                             {locale === "ar" ? "تسجيل الخروج" : "Logout"}
@@ -127,6 +139,8 @@ export function SiteHeader() {
                 </div>
             </nav>
 
+            {logoutError ? <p role="alert" className="border-t border-red-200 bg-red-50 px-4 py-2 text-center text-sm text-red-800">{logoutError}</p> : null}
+
             {isOpen ? (
                 <div className="border-t border-emerald-900/10 bg-white px-4 py-4 md:hidden">
                     <div className="flex flex-col gap-2">
@@ -149,7 +163,7 @@ export function SiteHeader() {
                             <button
                                 type="button"
                                 onClick={() => {
-                                    logout();
+                                    void handleLogout();
                                     setIsOpen(false);
                                 }}
                                 className="mt-2 rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700"

@@ -7,45 +7,25 @@ import {
     useEffect,
     useMemo,
     useState,
+    useSyncExternalStore,
+    type Dispatch,
     type ReactNode,
+    type SetStateAction,
 } from "react";
 
-import { products as initialProducts } from "@/data/products";
-import { treatments as initialTreatments } from "@/data/treatments";
-import { demoUsers, getUserProfile } from "@/lib/auth";
+import { useAuth } from "@/components/auth/auth-provider";
+import { createClient } from "@/lib/supabase/client";
 import type { CartItem, ClinicAppointment, ClinicHours, Product, ProductOrder, Treatment } from "@/types/clinic";
 
-const productsStorageKey = "greens-healing-products";
-const treatmentsStorageKey = "greens-healing-treatments";
-const appointmentsStorageKey = "greens-healing-appointments";
 const cartStorageKey = "greens-healing-cart";
 const ordersStorageKey = "greens-healing-product-orders";
 const clinicLogoStorageKey = "greens-healing-clinic-logo";
-const clinicHoursStorageKey = "greens-healing-clinic-hours";
-const legacySampleProductIds = new Set([
-    "sidian-honey",
-    "citrus-honey",
-    "jardi-honey",
-    "sidian-honey-honeycomb",
-    "green-honey",
-    "summer-honey",
-    "honey-nut-mixture",
-    "pollen-pistachio-honey",
-]);
-const legacySampleTreatmentIds = new Set([
-    "hijama-islamic",
-    "comprehensive-chinese-cupping",
-    "massage-cupping",
-    "muscle-relief-massage",
-    "complete-chinese-massage",
-    "healing-session",
-    "healing-stone-therapy",
-    "dry-acupuncture",
-    "ear-candling",
-]);
+const emptyCart: CartItem[] = [];
+const emptyOrders: ProductOrder[] = [];
 
 interface ClinicDataContextValue {
     isLoaded: boolean;
+    dataError: string;
     clinicLogo: string;
     clinicHours: ClinicHours | null;
     products: Product[];
@@ -53,14 +33,18 @@ interface ClinicDataContextValue {
     appointments: ClinicAppointment[];
     cartItems: CartItem[];
     productOrders: ProductOrder[];
-    setProducts: (products: Product[]) => void;
-    setTreatments: (treatments: Treatment[]) => void;
+    saveProduct: (product: Omit<Product, "id">, id?: string) => Promise<void>;
+    deleteProduct: (productId: string) => Promise<void>;
+    adjustProductStock: (productId: string, quantityDelta: number) => Promise<void>;
+    saveTreatment: (treatment: Omit<Treatment, "id">, id?: string) => Promise<void>;
+    deleteTreatment: (treatmentId: string) => Promise<void>;
     setClinicLogo: (logo: string) => void;
-    setClinicHours: (hours: ClinicHours | null) => void;
+    setClinicHours: (hours: ClinicHours | null) => Promise<void>;
     isAppointmentSlotAvailable: (date: string, startTime: string, endTime: string) => boolean;
-    bookAppointment: (appointment: Omit<ClinicAppointment, "id" | "createdAt" | "isRead">) => boolean;
-    markAppointmentsRead: () => void;
-    updateAppointmentStatus: (appointmentId: string, status: "Confirmed" | "Cancelled") => boolean;
+    getBookedAppointmentSlots: (date: string) => Promise<Array<{ startTime: string; endTime: string }>>;
+    bookAppointment: (appointment: Pick<ClinicAppointment, "treatmentId" | "date" | "startTime" | "endTime">) => Promise<boolean>;
+    markAppointmentsRead: () => Promise<void>;
+    updateAppointmentStatus: (appointmentId: string, status: "Confirmed" | "Cancelled") => Promise<boolean>;
     addToCart: (productId: string) => boolean;
     updateCartQuantity: (productId: string, quantity: number) => void;
     removeFromCart: (productId: string) => void;
@@ -80,96 +64,288 @@ function readStoredData<T>(key: string, fallback: T): T {
     }
 }
 
+function subscribeToLocalStorage(key: string, onChange: () => void) {
+    const handleStorage = (event: StorageEvent) => {
+        if (event.key === key || event.key === null) onChange();
+    };
+    const handleLocalStorageChange = (event: Event) => {
+        if ((event as CustomEvent<string>).detail === key) onChange();
+    };
+
+    window.addEventListener("storage", handleStorage);
+    window.addEventListener("clinic-local-storage-change", handleLocalStorageChange);
+    return () => {
+        window.removeEventListener("storage", handleStorage);
+        window.removeEventListener("clinic-local-storage-change", handleLocalStorageChange);
+    };
+}
+
+function useLocalStorageString(key: string) {
+    const subscribe = useCallback((onChange: () => void) => subscribeToLocalStorage(key, onChange), [key]);
+    const getSnapshot = useCallback(() => window.localStorage.getItem(key), [key]);
+    const storedValue = useSyncExternalStore(subscribe, getSnapshot, () => null);
+    const setStoredValue = useCallback((value: string | null) => {
+        if (value === null) window.localStorage.removeItem(key);
+        else window.localStorage.setItem(key, value);
+        window.dispatchEvent(new CustomEvent("clinic-local-storage-change", { detail: key }));
+    }, [key]);
+    return [storedValue, setStoredValue] as const;
+}
+
+function useLocalStorageData<T>(key: string, fallback: T): [T, Dispatch<SetStateAction<T>>] {
+    const [storedValue, setStoredValue] = useLocalStorageString(key);
+    const value = useMemo(() => {
+        if (!storedValue) return fallback;
+        try {
+            return JSON.parse(storedValue) as T;
+        } catch {
+            return fallback;
+        }
+    }, [fallback, storedValue]);
+    const setValue = useCallback<Dispatch<SetStateAction<T>>>((nextValue) => {
+        const current = readStoredData(key, fallback);
+        setStoredValue(JSON.stringify(typeof nextValue === "function"
+            ? (nextValue as (currentValue: T) => T)(current)
+            : nextValue));
+    }, [fallback, key, setStoredValue]);
+    return [value, setValue];
+}
+
 export function ClinicDataProvider({ children }: { children: ReactNode }) {
-    const [products, setProducts] = useState(initialProducts);
-    const [treatments, setTreatments] = useState(initialTreatments);
+    const { user, isLoaded: authLoaded } = useAuth();
+    const [products, setProducts] = useState<Product[]>([]);
+    const [treatments, setTreatments] = useState<Treatment[]>([]);
     const [appointments, setAppointments] = useState<ClinicAppointment[]>([]);
-    const [cartItems, setCartItems] = useState<CartItem[]>([]);
-    const [productOrders, setProductOrders] = useState<ProductOrder[]>([]);
-    const [clinicLogo, setClinicLogoState] = useState("");
+    const [cartItems, setCartItems] = useLocalStorageData(cartStorageKey, emptyCart);
+    const [productOrders, setProductOrders] = useLocalStorageData(ordersStorageKey, emptyOrders);
+    const [storedClinicLogo, setStoredClinicLogo] = useLocalStorageString(clinicLogoStorageKey);
+    const clinicLogo = storedClinicLogo ?? "";
     const [clinicHours, setClinicHoursState] = useState<ClinicHours | null>(null);
     const [isLoaded, setIsLoaded] = useState(false);
+    const [dataError, setDataError] = useState("");
 
     useEffect(() => {
-        setProducts(readStoredData<Product[]>(productsStorageKey, initialProducts).filter((product) => !legacySampleProductIds.has(product.id)));
-        setTreatments(readStoredData<Treatment[]>(treatmentsStorageKey, initialTreatments).filter((treatment) => !legacySampleTreatmentIds.has(treatment.id)));
-        setAppointments(readStoredData<ClinicAppointment[]>(appointmentsStorageKey, []).filter((appointment) => !legacySampleTreatmentIds.has(appointment.treatmentId)));
-        setCartItems(readStoredData<CartItem[]>(cartStorageKey, []).filter((item) => !legacySampleProductIds.has(item.productId)));
-        setProductOrders(readStoredData<ProductOrder[]>(ordersStorageKey, []).filter((order) => order.items.every((item) => !legacySampleProductIds.has(item.productId))));
-        const storedClinicLogo = window.localStorage.getItem(clinicLogoStorageKey);
-        const adminAccount = demoUsers.find((user) => user.role === "admin");
-        const previousAdminPhoto = adminAccount ? getUserProfile(adminAccount).photoUrl ?? "" : "";
-        const clinicLogo = storedClinicLogo ?? previousAdminPhoto;
-        setClinicLogoState(clinicLogo);
-        if (!storedClinicLogo && clinicLogo) {
-            window.localStorage.setItem(clinicLogoStorageKey, clinicLogo);
-        }
-        setClinicHoursState(readStoredData<ClinicHours | null>(clinicHoursStorageKey, null));
-        setIsLoaded(true);
-    }, []);
+        if (!authLoaded) return;
+        let mounted = true;
+        const loadClinicData = async () => {
+            const supabase = createClient();
+            const [treatmentResult, productResult, settingsResult, appointmentResult] = await Promise.all([
+                supabase.from("treatments").select("*").order("name_en"),
+                supabase.from("products").select("*").order("name_en"),
+                supabase.from("clinic_settings").select("*").eq("id", true).maybeSingle(),
+                user ? supabase.from("appointments").select("*, patient_profiles(full_name, email, phone)").order("appointment_date", { ascending: false }) : Promise.resolve({ data: [], error: null }),
+            ]);
+            const loadError = treatmentResult.error ?? productResult.error ?? settingsResult.error ?? appointmentResult.error;
+            if (loadError) throw loadError;
+            if (!mounted) return;
 
-    useEffect(() => {
-        if (!isLoaded) return;
-        window.localStorage.setItem(productsStorageKey, JSON.stringify(products));
-        window.localStorage.setItem(treatmentsStorageKey, JSON.stringify(treatments));
-        window.localStorage.setItem(appointmentsStorageKey, JSON.stringify(appointments));
-        window.localStorage.setItem(cartStorageKey, JSON.stringify(cartItems));
-        window.localStorage.setItem(ordersStorageKey, JSON.stringify(productOrders));
-        if (clinicLogo) window.localStorage.setItem(clinicLogoStorageKey, clinicLogo);
-        else window.localStorage.removeItem(clinicLogoStorageKey);
-        if (clinicHours) window.localStorage.setItem(clinicHoursStorageKey, JSON.stringify(clinicHours));
-        else window.localStorage.removeItem(clinicHoursStorageKey);
-    }, [appointments, cartItems, clinicHours, clinicLogo, isLoaded, products, productOrders, treatments]);
-
-    useEffect(() => {
-        const syncStoredCollection = (event: StorageEvent) => {
-            if (event.key === appointmentsStorageKey) {
-                try {
-                    setAppointments(event.newValue ? JSON.parse(event.newValue) as ClinicAppointment[] : []);
-                } catch {
-                    setAppointments([]);
-                }
-            }
-            if (event.key === ordersStorageKey) {
-                try {
-                    setProductOrders(event.newValue ? JSON.parse(event.newValue) as ProductOrder[] : []);
-                } catch {
-                    setProductOrders([]);
-                }
-            }
-            if (event.key === clinicLogoStorageKey) {
-                setClinicLogoState(event.newValue ?? "");
-            }
-            if (event.key === clinicHoursStorageKey) {
-                try {
-                    setClinicHoursState(event.newValue ? JSON.parse(event.newValue) as ClinicHours : null);
-                } catch {
-                    setClinicHoursState(null);
-                }
-            }
+            setTreatments((treatmentResult.data ?? []).map((row) => ({
+                id: row.id,
+                arName: row.name_ar,
+                enName: row.name_en,
+                arDescription: row.description_ar,
+                enDescription: row.description_en,
+                price: Number(row.price),
+                duration: row.duration_minutes,
+                category: row.category,
+                image: row.image_url ?? undefined,
+                active: row.is_active,
+            })));
+            setProducts((productResult.data ?? []).map((row) => ({
+                id: row.id,
+                arName: row.name_ar,
+                enName: row.name_en,
+                description: row.description_en,
+                arDescription: row.description_ar,
+                enDescription: row.description_en,
+                category: row.category,
+                price: Number(row.price),
+                weight: row.weight,
+                stock: row.stock_quantity,
+                image: row.image_url ?? undefined,
+                active: row.is_active,
+            })));
+            setClinicHoursState(settingsResult.data?.start_time && settingsResult.data?.end_time ? {
+                workingDays: settingsResult.data.working_days,
+                startTime: settingsResult.data.start_time.slice(0, 5),
+                endTime: settingsResult.data.end_time.slice(0, 5),
+                slotInterval: settingsResult.data.slot_interval_minutes,
+            } : null);
+            setAppointments((appointmentResult.data ?? []).map((row) => {
+                const profile = Array.isArray(row.patient_profiles) ? row.patient_profiles[0] : row.patient_profiles;
+                return {
+                    id: row.id,
+                    patientName: profile?.full_name ?? "",
+                    patientEmail: profile?.email ?? "",
+                    patientPhone: profile?.phone ?? undefined,
+                    treatmentId: row.treatment_id,
+                    treatmentName: row.treatment_name_en_snapshot,
+                    date: row.appointment_date,
+                    startTime: row.start_time.slice(0, 5),
+                    endTime: row.end_time.slice(0, 5),
+                    status: row.status[0].toUpperCase() + row.status.slice(1) as ClinicAppointment["status"],
+                    createdAt: row.created_at,
+                    isRead: row.is_read,
+                };
+            }));
+            setIsLoaded(true);
+            setDataError("");
         };
 
-        window.addEventListener("storage", syncStoredCollection);
-        return () => window.removeEventListener("storage", syncStoredCollection);
+        void loadClinicData().catch((error: unknown) => {
+            if (!mounted) return;
+            const message = error instanceof Error ? error.message : "Unable to load clinic data.";
+            console.error("Unable to load clinic data from Supabase:", message);
+            setDataError(message);
+            setIsLoaded(true);
+        });
+
+        return () => {
+            mounted = false;
+        };
+    }, [authLoaded, user]);
+
+    const saveTreatment = useCallback(async (treatment: Omit<Treatment, "id">, id?: string) => {
+        const values = {
+            name_ar: treatment.arName.trim(),
+            name_en: treatment.enName.trim(),
+            description_ar: treatment.arDescription,
+            description_en: treatment.enDescription,
+            price: treatment.price,
+            duration_minutes: treatment.duration,
+            category: treatment.category,
+            image_url: treatment.image ?? null,
+            is_active: treatment.active ?? true,
+        };
+        const supabase = createClient();
+        const { data, error } = id
+            ? await supabase.from("treatments").update(values).eq("id", id).select().single()
+            : await supabase.from("treatments").insert(values).select().single();
+        if (error) throw error;
+        const saved: Treatment = {
+            id: data.id,
+            arName: data.name_ar,
+            enName: data.name_en,
+            arDescription: data.description_ar,
+            enDescription: data.description_en,
+            price: Number(data.price),
+            duration: data.duration_minutes,
+            category: data.category,
+            image: data.image_url ?? undefined,
+            active: data.is_active,
+        };
+        setTreatments((current) => id
+            ? current.map((item) => item.id === id ? saved : item)
+            : [...current, saved]);
     }, []);
 
-    const markAppointmentsRead = useCallback(() => {
-        if (appointments.every((appointment) => appointment.isRead)) return;
-        const nextAppointments = appointments.map((appointment) => ({ ...appointment, isRead: true }));
-        setAppointments(nextAppointments);
-        window.localStorage.setItem(appointmentsStorageKey, JSON.stringify(nextAppointments));
+    const deleteTreatment = useCallback(async (treatmentId: string) => {
+        const { error } = await createClient().from("treatments").delete().eq("id", treatmentId);
+        if (error) throw error;
+        setTreatments((current) => current.filter((item) => item.id !== treatmentId));
+    }, []);
+
+    const adjustProductStock = useCallback(async (productId: string, quantityDelta: number) => {
+        if (!Number.isInteger(quantityDelta) || quantityDelta === 0) {
+            throw new Error("Inventory adjustment must be a non-zero whole number.");
+        }
+        const { error } = await createClient().from("inventory").insert({
+            product_id: productId,
+            quantity_delta: quantityDelta,
+            reason: quantityDelta > 0 ? "Stock received" : "Stock adjustment",
+        });
+        if (error) throw error;
+        setProducts((current) => current.map((product) => product.id === productId
+            ? { ...product, stock: product.stock + quantityDelta }
+            : product));
+    }, []);
+
+    const saveProduct = useCallback(async (product: Omit<Product, "id">, id?: string) => {
+        const values = {
+            name_ar: product.arName.trim(),
+            name_en: product.enName.trim(),
+            description_ar: product.arDescription ?? product.description,
+            description_en: product.enDescription ?? product.description,
+            price: product.price,
+            category: product.category,
+            weight: product.weight,
+            image_url: product.image ?? null,
+            is_active: product.active,
+        };
+        const supabase = createClient();
+        const { data, error } = id
+            ? await supabase.from("products").update(values).eq("id", id).select().single()
+            : await supabase.from("products").insert({ ...values, stock_quantity: 0 }).select().single();
+        if (error) throw error;
+        const saved: Product = {
+            id: data.id,
+            arName: data.name_ar,
+            enName: data.name_en,
+            description: data.description_en,
+            arDescription: data.description_ar,
+            enDescription: data.description_en,
+            category: data.category,
+            price: Number(data.price),
+            weight: data.weight,
+            stock: data.stock_quantity,
+            image: data.image_url ?? undefined,
+            active: data.is_active,
+        };
+        setProducts((current) => id
+            ? current.map((item) => item.id === id ? saved : item)
+            : [...current, saved]);
+
+        const stockDelta = product.stock - saved.stock;
+        if (stockDelta !== 0) {
+            try {
+                await adjustProductStock(saved.id, stockDelta);
+            } catch (stockError) {
+                throw new Error(
+                    `Product details were saved, but its stock was not adjusted: ${stockError instanceof Error ? stockError.message : "unknown error"}`,
+                );
+            }
+        }
+    }, [adjustProductStock]);
+
+    const deleteProduct = useCallback(async (productId: string) => {
+        const { error } = await createClient().from("products").delete().eq("id", productId);
+        if (error) throw error;
+        setProducts((current) => current.filter((product) => product.id !== productId));
+    }, []);
+
+    const markAppointmentsRead = useCallback(async () => {
+        const unreadIds = appointments.filter((appointment) => !appointment.isRead).map((appointment) => appointment.id);
+        if (!unreadIds.length) return;
+        const { error } = await createClient().from("appointments").update({ is_read: true }).in("id", unreadIds);
+        if (error) throw error;
+        setAppointments((current) => current.map((appointment) => ({ ...appointment, isRead: true })));
     }, [appointments]);
 
-    const updateAppointmentStatus = useCallback((appointmentId: string, status: "Confirmed" | "Cancelled") => {
+    const updateAppointmentStatus = useCallback(async (appointmentId: string, status: "Confirmed" | "Cancelled") => {
         const appointmentExists = appointments.some((appointment) => appointment.id === appointmentId && appointment.status === "Pending");
         if (!appointmentExists) return false;
-        const nextAppointments = appointments.map((appointment) => appointment.id === appointmentId && appointment.status === "Pending"
+        const { error } = await createClient().from("appointments").update({
+            status: status.toLowerCase(),
+            is_read: true,
+        }).eq("id", appointmentId).eq("status", "pending").select("id").single();
+        if (error) throw error;
+        setAppointments((current) => current.map((appointment) => appointment.id === appointmentId && appointment.status === "Pending"
             ? { ...appointment, status, isRead: true }
-            : appointment);
-        setAppointments(nextAppointments);
-        window.localStorage.setItem(appointmentsStorageKey, JSON.stringify(nextAppointments));
+            : appointment));
         return true;
     }, [appointments]);
+
+    const getBookedAppointmentSlots = useCallback(async (date: string) => {
+        const { data, error } = await createClient().rpc("get_booked_appointment_slots", {
+            p_appointment_date: date,
+        });
+        if (error) throw error;
+        const slots = (data ?? []) as Array<{ start_time: string; end_time: string }>;
+        return slots.map((slot) => ({
+            startTime: slot.start_time.slice(0, 5),
+            endTime: slot.end_time.slice(0, 5),
+        }));
+    }, []);
 
     const addToCart = useCallback((productId: string) => {
         const product = products.find((item) => item.id === productId && item.active);
@@ -181,10 +357,9 @@ export function ClinicDataProvider({ children }: { children: ReactNode }) {
             ? cartItems.map((item) => item.productId === productId ? { ...item, quantity: nextQuantity } : item)
             : [...cartItems, { productId, quantity: nextQuantity }];
         setCartItems(nextCart);
-        window.localStorage.setItem(cartStorageKey, JSON.stringify(nextCart));
         window.dispatchEvent(new CustomEvent("clinic-cart-item-added", { detail: { productId } }));
         return true;
-    }, [cartItems, products]);
+    }, [cartItems, products, setCartItems]);
 
     const updateCartQuantity = useCallback((productId: string, quantity: number) => {
         const product = products.find((item) => item.id === productId && item.active);
@@ -197,30 +372,31 @@ export function ClinicDataProvider({ children }: { children: ReactNode }) {
             ? { ...item, quantity: Math.min(Math.floor(quantity), product.stock) }
             : item).filter((item) => item.quantity > 0);
         setCartItems(nextCart);
-        window.localStorage.setItem(cartStorageKey, JSON.stringify(nextCart));
-    }, [cartItems, products]);
+    }, [cartItems, products, setCartItems]);
 
     const removeFromCart = useCallback((productId: string) => {
         const nextCart = cartItems.filter((item) => item.productId !== productId);
         setCartItems(nextCart);
-        window.localStorage.setItem(cartStorageKey, JSON.stringify(nextCart));
-    }, [cartItems]);
+    }, [cartItems, setCartItems]);
 
     const clearCart = useCallback(() => {
         setCartItems([]);
-        window.localStorage.removeItem(cartStorageKey);
-    }, []);
+    }, [setCartItems]);
 
     const setClinicLogo = useCallback((logo: string) => {
-        setClinicLogoState(logo);
-        if (logo) window.localStorage.setItem(clinicLogoStorageKey, logo);
-        else window.localStorage.removeItem(clinicLogoStorageKey);
-    }, []);
+        setStoredClinicLogo(logo || null);
+    }, [setStoredClinicLogo]);
 
-    const setClinicHours = useCallback((hours: ClinicHours | null) => {
+    const setClinicHours = useCallback(async (hours: ClinicHours | null) => {
+        const { error } = await createClient().from("clinic_settings").upsert({
+            id: true,
+            working_days: hours?.workingDays ?? [],
+            start_time: hours?.startTime ?? null,
+            end_time: hours?.endTime ?? null,
+            slot_interval_minutes: hours?.slotInterval ?? 30,
+        });
+        if (error) throw error;
         setClinicHoursState(hours);
-        if (hours) window.localStorage.setItem(clinicHoursStorageKey, JSON.stringify(hours));
-        else window.localStorage.removeItem(clinicHoursStorageKey);
     }, []);
 
     const isAppointmentSlotAvailable = useCallback((date: string, startTime: string, endTime: string) => {
@@ -240,8 +416,7 @@ export function ClinicDataProvider({ children }: { children: ReactNode }) {
         );
     }, [appointments, clinicHours]);
 
-    const bookAppointment = useCallback((appointment: Omit<ClinicAppointment, "id" | "createdAt" | "isRead">) => {
-        const latestAppointments = readStoredData<ClinicAppointment[]>(appointmentsStorageKey, appointments);
+    const bookAppointment = useCallback(async (appointment: Pick<ClinicAppointment, "treatmentId" | "date" | "startTime" | "endTime">) => {
         const start = startTimeToMinutes(appointment.startTime);
         const end = startTimeToMinutes(appointment.endTime);
         const opening = clinicHours ? startTimeToMinutes(clinicHours.startTime) : null;
@@ -258,7 +433,7 @@ export function ClinicDataProvider({ children }: { children: ReactNode }) {
             && clinicHours.slotInterval > 0
             && (start - opening) % clinicHours.slotInterval === 0,
         );
-        const collides = latestAppointments.some((existing) =>
+        const collides = appointments.some((existing) =>
             existing.date === appointment.date
             && existing.status !== "Cancelled"
             && start !== null
@@ -267,18 +442,32 @@ export function ClinicDataProvider({ children }: { children: ReactNode }) {
             && end > (startTimeToMinutes(existing.startTime) ?? 0),
         );
         if (!withinConfiguredHours || collides) return false;
+        const { data, error } = await createClient().rpc("create_appointment", {
+            p_treatment_id: appointment.treatmentId,
+            p_appointment_date: appointment.date,
+            p_start_time: appointment.startTime,
+            p_end_time: appointment.endTime,
+        });
+        if (error) throw error;
+        const booked = Array.isArray(data) ? data[0] : data;
+        if (!booked) throw new Error("Supabase did not return the created appointment.");
         const nextAppointment: ClinicAppointment = {
-            ...appointment,
-            id: `appointment-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-            createdAt: new Date().toISOString(),
-            isRead: false,
+            id: booked.id,
+            patientName: user?.name ?? "",
+            patientEmail: user?.email ?? "",
+            treatmentId: booked.treatment_id,
+            treatmentName: booked.treatment_name_en_snapshot,
+            date: booked.appointment_date,
+            startTime: booked.start_time.slice(0, 5),
+            endTime: booked.end_time.slice(0, 5),
+            status: "Pending",
+            createdAt: booked.created_at,
+            isRead: booked.is_read,
         };
-        const nextAppointments = [nextAppointment, ...latestAppointments];
-        setAppointments(nextAppointments);
-        window.localStorage.setItem(appointmentsStorageKey, JSON.stringify(nextAppointments));
+        setAppointments((current) => [nextAppointment, ...current]);
         window.dispatchEvent(new CustomEvent("clinic-appointment-created", { detail: nextAppointment }));
         return true;
-    }, [appointments, clinicHours]);
+    }, [appointments, clinicHours, user]);
 
     const submitProductOrder = useCallback((customer: Pick<ProductOrder, "customerName" | "customerPhone" | "deliveryAddress">) => {
         if (!cartItems.length || !customer.customerName.trim() || !customer.customerPhone.trim() || !customer.deliveryAddress.trim()) return null;
@@ -311,25 +500,27 @@ export function ClinicDataProvider({ children }: { children: ReactNode }) {
         const nextOrders = [order, ...productOrders];
         setProductOrders(nextOrders);
         setCartItems([]);
-        window.localStorage.setItem(ordersStorageKey, JSON.stringify(nextOrders));
-        window.localStorage.removeItem(cartStorageKey);
         window.dispatchEvent(new CustomEvent("clinic-product-order-created", { detail: order }));
         return order;
-    }, [cartItems, products, productOrders]);
+    }, [cartItems, products, productOrders, setCartItems, setProductOrders]);
 
     const markProductOrdersRead = useCallback(() => {
         if (productOrders.every((order) => order.isRead)) return;
         const nextOrders = productOrders.map((order) => ({ ...order, isRead: true }));
         setProductOrders(nextOrders);
-        window.localStorage.setItem(ordersStorageKey, JSON.stringify(nextOrders));
-    }, [productOrders]);
+    }, [productOrders, setProductOrders]);
 
     const value = useMemo(
-        () => ({ isLoaded, clinicLogo, clinicHours, products, treatments, appointments, cartItems, productOrders, setProducts, setTreatments, setClinicLogo, setClinicHours, isAppointmentSlotAvailable, bookAppointment, markAppointmentsRead, updateAppointmentStatus, addToCart, updateCartQuantity, removeFromCart, clearCart, submitProductOrder, markProductOrdersRead }),
-        [isLoaded, clinicLogo, clinicHours, products, treatments, appointments, cartItems, productOrders, setClinicLogo, setClinicHours, isAppointmentSlotAvailable, bookAppointment, markAppointmentsRead, updateAppointmentStatus, addToCart, updateCartQuantity, removeFromCart, clearCart, submitProductOrder, markProductOrdersRead],
+        () => ({ isLoaded, dataError, clinicLogo, clinicHours, products, treatments, appointments, cartItems, productOrders, saveProduct, deleteProduct, adjustProductStock, saveTreatment, deleteTreatment, setClinicLogo, setClinicHours, isAppointmentSlotAvailable, getBookedAppointmentSlots, bookAppointment, markAppointmentsRead, updateAppointmentStatus, addToCart, updateCartQuantity, removeFromCart, clearCart, submitProductOrder, markProductOrdersRead }),
+        [isLoaded, dataError, clinicLogo, clinicHours, products, treatments, appointments, cartItems, productOrders, saveProduct, deleteProduct, adjustProductStock, saveTreatment, deleteTreatment, setClinicLogo, setClinicHours, isAppointmentSlotAvailable, getBookedAppointmentSlots, bookAppointment, markAppointmentsRead, updateAppointmentStatus, addToCart, updateCartQuantity, removeFromCart, clearCart, submitProductOrder, markProductOrdersRead],
     );
 
-    return <ClinicDataContext.Provider value={value}>{children}</ClinicDataContext.Provider>;
+    return (
+        <ClinicDataContext.Provider value={value}>
+            {dataError ? <div role="alert" className="border-b border-red-200 bg-red-50 px-4 py-2 text-center text-sm text-red-800">{dataError}</div> : null}
+            {children}
+        </ClinicDataContext.Provider>
+    );
 }
 
 export function useClinicData() {

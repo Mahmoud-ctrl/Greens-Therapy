@@ -46,7 +46,7 @@ export default function ProductsPage() {
                                 <h3 className="mt-4 text-lg font-bold text-slate-900">
                                     {locale === "ar" ? product.arName : product.enName}
                                 </h3>
-                                <p className="mt-3 text-sm leading-7 text-slate-600">{product.description}</p>
+                                <p className="mt-3 text-sm leading-7 text-slate-600">{locale === "ar" ? product.arDescription : product.enDescription ?? product.description}</p>
                                 <div className="mt-5 flex items-center justify-between">
                                     <span className="text-lg font-bold text-emerald-950">${product.price}</span>
                                     <span className="text-sm text-slate-500">{product.weight}</span>

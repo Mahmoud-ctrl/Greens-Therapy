@@ -8,8 +8,7 @@ import { CheckCircle2 } from "lucide-react";
 import { useAuth } from "@/components/auth/auth-provider";
 import { useClinicData } from "@/components/providers/clinic-data-provider";
 import { useLocale } from "@/components/providers/locale-provider";
-
-const adminWhatsAppNumber = "96171020821";
+import { clinicWhatsAppNumber } from "@/lib/clinic-contact";
 
 export default function CartPage() {
     const { locale } = useLocale();
@@ -17,7 +16,8 @@ export default function CartPage() {
     const { user, isLoaded: isAuthLoaded } = useAuth();
     const router = useRouter();
     const isStaff = user?.role === "admin" || user?.role === "receptionist";
-    const [customerName, setCustomerName] = useState("");
+    const [customerNameDraft, setCustomerNameDraft] = useState<string | null>(null);
+    const customerName = customerNameDraft ?? user?.name ?? "";
     const [customerPhone, setCustomerPhone] = useState("");
     const [deliveryAddress, setDeliveryAddress] = useState("");
     const [orderPlacedId, setOrderPlacedId] = useState<string | null>(null);
@@ -29,10 +29,6 @@ export default function CartPage() {
         product: products.find((product) => product.id === item.productId),
     }));
     const total = cartProducts.reduce((sum, row) => sum + (row.product?.price ?? 0) * row.item.quantity, 0);
-
-    useEffect(() => {
-        if (user?.name) setCustomerName(user.name);
-    }, [user?.name]);
 
     useEffect(() => {
         if (isAuthLoaded && isStaff) router.replace("/dashboard");
@@ -58,7 +54,7 @@ export default function CartPage() {
             `${isArabic ? "المجموع" : "Total"}: $${order.total.toFixed(2)}`,
             isArabic ? "طريقة الدفع: نقداً عند الاستلام" : "Payment: Cash on delivery",
         ].join("\n");
-        const whatsappUrl = `https://wa.me/${adminWhatsAppNumber}?text=${encodeURIComponent(message)}`;
+        const whatsappUrl = `https://wa.me/${clinicWhatsAppNumber}?text=${encodeURIComponent(message)}`;
         setWhatsAppOrderUrl(whatsappUrl);
         window.open(whatsappUrl, "_blank", "noopener,noreferrer");
         setOrderPlacedId(order.id);
@@ -77,7 +73,7 @@ export default function CartPage() {
                     <h2 className="mt-4 text-2xl font-bold text-emerald-950">{isArabic ? "تم تأكيد طلبك" : "Your order is confirmed"}</h2>
                     <p className="mt-2 text-slate-600">{isArabic ? "تم حفظ الطلب لإدارة العيادة. أكمل إرساله عبر واتساب وادفع نقداً عند الاستلام." : "Your order is saved for the clinic admin. Send the WhatsApp message to notify them, then pay cash on delivery."}</p>
                     <p className="mt-2 text-xs text-slate-500">{isArabic ? "رقم الطلب" : "Order ID"}: {orderPlacedId}</p>
-                    {whatsAppOrderUrl ? <a href={whatsAppOrderUrl} target="_blank" rel="noreferrer" className="mt-5 inline-flex items-center gap-2 font-semibold text-emerald-800 underline">{isArabic ? "فتح رسالة واتساب إلى ‎+961 71 020 821" : "Open WhatsApp message to +961 71 020 821"}</a> : null}
+                    {whatsAppOrderUrl ? <a href={whatsAppOrderUrl} target="_blank" rel="noreferrer" className="mt-5 inline-flex items-center gap-2 font-semibold text-emerald-800 underline">{isArabic ? `فتح رسالة واتساب إلى ‎+${clinicWhatsAppNumber}` : `Open WhatsApp message to +${clinicWhatsAppNumber}`}</a> : null}
                     <Link href="/products" className="mt-6 inline-flex rounded-lg bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-800">{isArabic ? "متابعة التسوق" : "Continue shopping"}</Link>
                 </div>
             ) : !isLoaded ? <p className="py-12 text-center text-slate-500">{isArabic ? "جارٍ تحميل السلة..." : "Loading cart..."}</p> : cartItems.length === 0 ? (
@@ -101,7 +97,7 @@ export default function CartPage() {
                         <div className="mt-5 flex justify-between border-b border-slate-200 pb-4 text-sm"><span>{isArabic ? "المجموع" : "Subtotal"}</span><span className="font-semibold">${total.toFixed(2)}</span></div>
                         <p className="mt-3 text-xs leading-5 text-slate-500">{isArabic ? "سيتم تأكيد رسوم التوصيل من إدارة العيادة." : "The clinic admin will confirm delivery charges."}</p>
                         <form onSubmit={confirmOrder} className="mt-5 space-y-3">
-                            <label className="block space-y-1 text-sm font-medium text-slate-700">{isArabic ? "الاسم الكامل" : "Full name"}<input required autoComplete="name" value={customerName} onChange={(event) => setCustomerName(event.target.value)} className="w-full rounded-lg border border-slate-300 px-3 py-2" /></label>
+                            <label className="block space-y-1 text-sm font-medium text-slate-700">{isArabic ? "الاسم الكامل" : "Full name"}<input required autoComplete="name" value={customerName} onChange={(event) => setCustomerNameDraft(event.target.value)} className="w-full rounded-lg border border-slate-300 px-3 py-2" /></label>
                             <label className="block space-y-1 text-sm font-medium text-slate-700">{isArabic ? "رقم الهاتف" : "Phone number"}<input required type="tel" autoComplete="tel" value={customerPhone} onChange={(event) => setCustomerPhone(event.target.value)} className="w-full rounded-lg border border-slate-300 px-3 py-2" /></label>
                             <label className="block space-y-1 text-sm font-medium text-slate-700">{isArabic ? "عنوان التوصيل" : "Delivery address"}<textarea required autoComplete="street-address" rows={3} value={deliveryAddress} onChange={(event) => setDeliveryAddress(event.target.value)} className="w-full resize-y rounded-lg border border-slate-300 px-3 py-2" /></label>
                             <div className="rounded-lg bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-900">{isArabic ? "الدفع نقداً عند استلام الطلب." : "Pay cash when your order is delivered."}</div>

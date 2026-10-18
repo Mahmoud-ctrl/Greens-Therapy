@@ -29,16 +29,28 @@ export function HomeHero({ locale, isStaff }: { locale: Locale; isStaff: boolean
                     <div className="relative grid items-center gap-10 lg:h-full lg:grid-cols-[1.05fr_0.95fr]">
                         {/* Copy */}
                         <div>
-                            <div className="flex items-center gap-3">
-                                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-emerald-950 text-honey-300">
-                                    <Leaf size={20} aria-hidden="true" />
-                                </span>
-                                <div className="leading-tight">
-                                    <p className="font-semibold text-emerald-950">{isArabic ? "معالج تقليدي " : "Traditional healer"}</p>
-                                    <p className="text-sm text-slate-600">
-                                        {isArabic ? "تعرّف على " : "Meet "}
-                                        <a href="#healer" className="font-semibold text-emerald-900 underline underline-offset-4">{isArabic ? "علي أخضر" : "Ali Akhdar"}</a>
-                                    </p>
+                            <div className="flex items-center justify-between gap-3">
+                                <div className="flex items-center gap-3">
+                                    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-emerald-950 text-honey-300">
+                                        <Leaf size={20} aria-hidden="true" />
+                                    </span>
+                                    <div className="leading-tight">
+                                        <p className="font-semibold text-emerald-950">{isArabic ? "معالج تقليدي " : "Traditional healer"}</p>
+                                        <p className="text-sm text-slate-600">
+                                            {isArabic ? "تعرّف على " : "Meet "}
+                                            <a href="#healer" className="font-semibold text-emerald-900 underline underline-offset-4">{isArabic ? "علي أخضر" : "Ali Akhdar"}</a>
+                                        </p>
+                                    </div>
+                                </div>
+                                <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-full bg-gradient-to-br from-honey-300 to-honey-500 shadow-lg shadow-emerald-950/20 ring-4 ring-card sm:h-20 sm:w-20 lg:hidden">
+                                    <Image
+                                        src={therapistPortrait}
+                                        alt={isArabic ? "المعالج علي أخضر" : "Healer Ali Akhdar"}
+                                        fill
+                                        priority
+                                        sizes="(min-width: 640px) 5rem, 4rem"
+                                        className="object-cover object-center"
+                                    />
                                 </div>
                             </div>
 
@@ -50,17 +62,6 @@ export function HomeHero({ locale, isStaff }: { locale: Locale; isStaff: boolean
                                         <sup className="ms-1 align-super text-[0.45em] font-medium text-honey-500">+</sup>
                                     </span>
                                 </h1>
-                                {/* Below lg the large photo is hidden to keep the therapy strip above the fold; this thumbnail takes its place. */}
-                                <div className="relative h-20 w-20 shrink-0 overflow-hidden rounded-full bg-gradient-to-br from-honey-300 to-honey-500 shadow-lg shadow-emerald-950/20 ring-4 ring-card min-[375px]:h-24 min-[375px]:w-24 sm:h-32 sm:w-32 lg:hidden">
-                                    <Image
-                                        src={therapistPoster}
-                                        alt={isArabic ? "المعالج علي أخضر" : "Healer Ali Akhdar"}
-                                        fill
-                                        priority
-                                        sizes="(min-width: 640px) 8rem, 6rem"
-                                        className="origin-[100%_18%] scale-[2.1] object-cover object-right"
-                                    />
-                                </div>
                             </div>
 
                             <div className="mt-5 border-t border-emerald-950/15 pt-5 sm:mt-7 short:lg:mt-5 short:lg:pt-4">
@@ -110,7 +111,7 @@ export function HomeHero({ locale, isStaff }: { locale: Locale; isStaff: boolean
                                 fill
                                 priority
                                 sizes="(min-width: 1024px) 27rem, 0px"
-                                className="origin-[100%_30%] scale-[1.75] object-cover object-right"
+                                className="origin-[100%_30%] scale-[1.3] object-cover object-right"
                             />
                         </div>
                     </div>

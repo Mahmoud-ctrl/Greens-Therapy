@@ -91,7 +91,7 @@ export function SiteHeader() {
                     </span>
                     <span className="leading-tight">
                         <span className="block font-display text-lg font-semibold text-emerald-950">Greens Healing Therapy</span>
-                        <span className="block text-[11px] tracking-[0.2em] text-honey-700 uppercase">
+                        <span className={`text-[11px] tracking-[0.2em] text-honey-700 uppercase ${pathname === "/" ? "hidden sm:block" : "block"}`}>
                             {isArabic ? "طبيعي · نقي · شافٍ" : "Natural · Pure · Healing"}
                         </span>
                     </span>

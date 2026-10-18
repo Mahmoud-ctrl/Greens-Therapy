@@ -107,6 +107,7 @@ export function TreatmentManager() {
                             label={ar ? "صورة العلاج" : "Treatment photo"}
                             value={form.image}
                             onChange={(image) => { setForm((current) => ({ ...current, image })); setError(""); }}
+                            onRemove={() => { setForm((current) => ({ ...current, image: undefined })); setError(""); }}
                             onError={setError}
                             maxBytes={300 * 1024}
                             isArabic={ar}

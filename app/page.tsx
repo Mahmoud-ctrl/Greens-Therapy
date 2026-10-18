@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import Image from "next/image";
 import { ArrowLeft, ArrowRight } from "lucide-react";
 
 import { useAuth } from "@/components/auth/auth-provider";
@@ -11,7 +10,6 @@ import { HomeHero, therapies } from "@/components/home/hero";
 import { useClinicData } from "@/components/providers/clinic-data-provider";
 import { useLocale } from "@/components/providers/locale-provider";
 import { CardSkeletons, EmptyState, SectionShell } from "@/components/ui/section-shell";
-import therapistPortrait from "../ali akhdar .png";
 
 export default function HomePage() {
   const { locale } = useLocale();
@@ -31,7 +29,7 @@ export default function HomePage() {
       {/* Treatments */}
       <SectionShell
         eyebrow={isArabic ? "علاجاتنا" : "Our therapies"}
-        title={isArabic ? "جلسات للجسد والروح" : "Sessions for body and mind"}
+        title={isArabic ? "خدماتنا" : "Our services"}
         description={isArabic ? "كل جلسة مصممة لتعيد التوازن وتخفف التوتر وتدعم قدرة الجسم على الشفاء." : "Each session is designed to restore balance, ease tension, and support the body's own ability to heal."}
         action={activeTreatments.length > 3 ? (
           <Link href="/treatments" className="inline-flex items-center gap-2 text-sm font-semibold text-emerald-700 hover:text-emerald-900">
@@ -53,11 +51,8 @@ export default function HomePage() {
 
       {/* Meet the healer */}
       <section id="healer" className="scroll-mt-24 bg-emerald-950 text-emerald-50">
-        <div className="mx-auto grid max-w-7xl items-center gap-12 px-4 py-20 sm:px-6 md:grid-cols-[0.8fr_1.2fr] lg:px-8">
-          <div className="relative mx-auto aspect-[4/5] w-full max-w-sm overflow-hidden rounded-[2rem] ring-1 ring-white/10">
-            <Image src={therapistPortrait} alt={isArabic ? "صورة علي أخضر" : "Portrait of Ali Akhdar"} fill sizes="(min-width: 768px) 24rem, 90vw" className="object-cover" />
-          </div>
-          <div>
+        <div className="mx-auto max-w-4xl px-4 py-20 sm:px-6 lg:px-8">
+          <div className="max-w-3xl">
             <p className="eyebrow text-honey-300">{isArabic ? "المعالج التقليدي" : "Traditional healer"}</p>
             <h2 className="mt-4 text-5xl font-semibold text-white sm:text-6xl">{isArabic ? "علي أخضر" : "Ali Akhdar"}</h2>
             <div className="mt-6 space-y-4 text-base leading-8 text-emerald-100/85">

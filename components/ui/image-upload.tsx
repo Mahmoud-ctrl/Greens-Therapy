@@ -1,7 +1,7 @@
 "use client";
 
 import { useId, useState } from "react";
-import { ImageUp } from "lucide-react";
+import { ImageUp, X } from "lucide-react";
 
 import { Spinner } from "@/components/ui/loading-button";
 
@@ -53,10 +53,11 @@ async function compressImage(file: File, maxDimension: number, maxBytes: number)
  * Image picker that compresses the file into a data URL (how the app stores clinic images)
  * and shows a processing state while it does.
  */
-export function ImageUpload({ label, value, onChange, onError, maxBytes, maxDimension = 1200, isArabic, previewClassName = "h-20 w-20 rounded-2xl" }: {
+export function ImageUpload({ label, value, onChange, onRemove, onError, maxBytes, maxDimension = 1200, isArabic, previewClassName = "h-20 w-20 rounded-2xl" }: {
     label: string;
     value?: string;
     onChange: (dataUrl: string) => void;
+    onRemove?: () => void;
     onError: (message: string) => void;
     /** Largest allowed size of the stored (compressed) image. */
     maxBytes: number;
@@ -103,17 +104,30 @@ export function ImageUpload({ label, value, onChange, onError, maxBytes, maxDime
                             ? <img src={value} alt="" className="h-full w-full object-cover" />
                             : <ImageUp size={22} strokeWidth={1.5} aria-hidden="true" className="text-slate-400" />}
                 </div>
-                <div>
-                    <label
-                        htmlFor={inputId}
-                        aria-disabled={isReading}
-                        className={`btn-secondary cursor-pointer px-4 py-2 ${isReading ? "pointer-events-none opacity-60" : ""}`}
-                    >
-                        {isReading ? <Spinner /> : <ImageUp size={16} aria-hidden="true" />}
-                        {isReading
-                            ? isArabic ? "جارٍ المعالجة..." : "Processing..."
-                            : value ? isArabic ? "تغيير الصورة" : "Change image" : isArabic ? "رفع صورة" : "Upload image"}
-                    </label>
+                <div className="flex flex-col items-start gap-1.5">
+                    <div className="flex flex-wrap items-center gap-2">
+                        <label
+                            htmlFor={inputId}
+                            aria-disabled={isReading}
+                            className={`btn-secondary cursor-pointer px-4 py-2 ${isReading ? "pointer-events-none opacity-60" : ""}`}
+                        >
+                            {isReading ? <Spinner /> : <ImageUp size={16} aria-hidden="true" />}
+                            {isReading
+                                ? isArabic ? "جارٍ المعالجة..." : "Processing..."
+                                : value ? isArabic ? "تغيير الصورة" : "Change image" : isArabic ? "رفع صورة" : "Upload image"}
+                        </label>
+                        {onRemove ? (
+                            <button
+                                type="button"
+                                onClick={onRemove}
+                                disabled={!value || isReading}
+                                className="inline-flex items-center gap-1 rounded-full border border-red-200 px-4 py-2 text-sm font-semibold text-red-700 transition hover:bg-red-50 hover:text-red-900 disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                                <X size={16} aria-hidden="true" />
+                                {isArabic ? "إزالة الصورة" : "Remove photo"}
+                            </button>
+                        ) : null}
+                    </div>
                     <input
                         id={inputId}
                         type="file"

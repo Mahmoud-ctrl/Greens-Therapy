@@ -34,11 +34,11 @@ function subscribeToLocale(onChange: () => void) {
 }
 
 function getLocaleSnapshot(): Locale {
-    return window.localStorage.getItem(localeStorageKey) === "en" ? "en" : "ar";
+    return window.localStorage.getItem(localeStorageKey) === "ar" ? "ar" : "en";
 }
 
 function getServerLocaleSnapshot(): Locale {
-    return "ar";
+    return "en";
 }
 
 export function LocaleProvider({ children }: { children: ReactNode }) {

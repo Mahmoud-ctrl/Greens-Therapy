@@ -138,6 +138,7 @@ export function ProductManager() {
                             label={ar ? "صورة المنتج" : "Product photo"}
                             value={form.image}
                             onChange={(image) => { setForm((current) => ({ ...current, image })); setError(""); }}
+                            onRemove={() => { setForm((current) => ({ ...current, image: undefined })); setError(""); }}
                             onError={setError}
                             maxBytes={300 * 1024}
                             isArabic={ar}

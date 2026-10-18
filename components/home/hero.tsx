@@ -10,9 +10,9 @@ import therapistPortrait from "../../ali akhdar .png";
 
 export const therapies: Array<{ icon: LucideIcon; ar: string; en: string }> = [
     { icon: FlaskRound, ar: "العلاج بالحجامة", en: "Cupping therapy" },
-    { icon: Hand, ar: "التدليك الصيني", en: "Chinese massage" },
-    { icon: Pin, ar: "العلاج بالإبر الجافة", en: "Dry needling" },
-    { icon: Flower2, ar: "الشفاء الشامل", en: "Holistic healing" },
+    { icon: Hand, ar: "التدليك ", en: "Massage" },
+    { icon: Pin, ar: "عسل طبيعي", en: "Natural Honey" },
+    { icon: Flower2, ar: "تربية النحل", en: "Beekeeping" },
 ];
 
 export function HomeHero({ locale, isStaff }: { locale: Locale; isStaff: boolean }) {
@@ -34,7 +34,7 @@ export function HomeHero({ locale, isStaff }: { locale: Locale; isStaff: boolean
                                     <Leaf size={20} aria-hidden="true" />
                                 </span>
                                 <div className="leading-tight">
-                                    <p className="font-semibold text-emerald-950">{isArabic ? "معالج تقليدي معتمد" : "Certified traditional healer"}</p>
+                                    <p className="font-semibold text-emerald-950">{isArabic ? "معالج تقليدي " : "Traditional healer"}</p>
                                     <p className="text-sm text-slate-600">
                                         {isArabic ? "تعرّف على " : "Meet "}
                                         <a href="#healer" className="font-semibold text-emerald-900 underline underline-offset-4">{isArabic ? "علي أخضر" : "Ali Akhdar"}</a>
@@ -46,7 +46,7 @@ export function HomeHero({ locale, isStaff }: { locale: Locale; isStaff: boolean
                                 <h1 className="min-w-0 font-display text-[clamp(3rem,15vw,4.5rem)] font-semibold leading-[0.85] tracking-tight text-emerald-950 sm:text-[7rem] lg:text-[clamp(4.5rem,15vh,9.5rem)]">
                                     {/* The brand name stays left-to-right in Arabic so the "+" keeps its place. */}
                                     <span dir="ltr" className="whitespace-nowrap">
-                                        Greens
+                                        Ali Akhdar
                                         <sup className="ms-1 align-super text-[0.45em] font-medium text-honey-500">+</sup>
                                     </span>
                                 </h1>
@@ -66,8 +66,8 @@ export function HomeHero({ locale, isStaff }: { locale: Locale; isStaff: boolean
                             <div className="mt-5 border-t border-emerald-950/15 pt-5 sm:mt-7 short:lg:mt-5 short:lg:pt-4">
                                 <p className="max-w-lg text-base leading-7 text-slate-700 sm:text-xl sm:leading-9 short:lg:text-lg short:lg:leading-8">
                                     {isArabic
-                                        ? "استعد توازنك بالحجامة والتدليك الصيني والإبر الجافة — مع عسل خام من خلايانا."
-                                        : "Restore your balance with cupping, Chinese massage and dry needling — with raw honey from our own hives."}
+                                        ? "استعادة التوازن الطبيعي."
+                                        : "Restore your balance."}
                                 </p>
 
                                 <div className="mt-5 hidden flex-wrap items-center gap-x-5 gap-y-3 border-b border-emerald-950/15 pb-5 text-sm sm:flex shorter:lg:hidden">

@@ -35,7 +35,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="ar" dir="rtl" suppressHydrationWarning className={`${plexArabic.variable} ${cormorant.variable} ${amiri.variable}`}>
+    <html lang="en" dir="ltr" suppressHydrationWarning className={`${plexArabic.variable} ${cormorant.variable} ${amiri.variable}`}>
       <body className="min-h-screen bg-background text-foreground antialiased">
         <AuthProvider>
           <ClinicDataProvider>
